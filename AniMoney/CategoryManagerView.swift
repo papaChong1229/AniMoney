@@ -4,72 +4,67 @@ import PhotosUI
 
 // MARK: - Category & Project Management View
 struct CategoryManagerView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Category.order, order: .forward) private var categories: [Category]
-    @Query(sort: \Project.order, order: .forward) private var projects: [Project]
-
-    @State private var showAddCategory = false
-    @State private var showAddProject  = false
+    @EnvironmentObject private var dc: DataController
+    @State private var showAddCategory   = false
+    @State private var showAddProject    = false
 
     var body: some View {
         NavigationStack {
             List {
-                // Categories Section
+                // — Categories
                 Section(header:
                     HStack {
                         Text("Categories")
                         Spacer()
-                        Button(action: { showAddCategory = true }) {
-                            Image(systemName: "plus")
-                        }
+                        Button { showAddCategory = true }
+                        label: { Image(systemName: "plus") }
                     }
                 ) {
-                    ForEach(categories) { category in
-                        NavigationLink(value: category) {
-                            Text(category.name)
+                    ForEach(dc.categories) { cat in
+                        NavigationLink(value: cat) {
+                            Text(cat.name)
                         }
                     }
                 }
-                
-                // Projects Section
+
+                // — Projects
                 Section(header:
                     HStack {
                         Text("Projects")
                         Spacer()
-                        Button(action: { showAddProject = true }) {
-                            Image(systemName: "plus")
-                        }
+                        Button { showAddProject = true }
+                        label: { Image(systemName: "plus") }
                     }
                 ) {
-                    ForEach(projects) { project in
-                        Text(project.name)
+                    ForEach(dc.projects) { proj in
+                        Text(proj.name)
                     }
                 }
             }
             .navigationTitle("Classification Manager")
-            // Navigation to subcategories
-            .navigationDestination(for: Category.self) { category in
-                SubcategoryListView(category: category)
+            .navigationDestination(for: Category.self) { cat in
+                SubcategoryListView(category: cat)
             }
-            // Modals for adding
             .sheet(isPresented: $showAddCategory) {
                 AddCategoryView()
+                    .environmentObject(dc)
             }
             .sheet(isPresented: $showAddProject) {
                 AddProjectView()
+                    .environmentObject(dc)
             }
         }
     }
 }
 
-// MARK: - Subcategory List & Add View
+
 struct SubcategoryListView: View {
-    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var dc: DataController
     let category: Category
-    @State private var showAddSubcategory = false
+    @State private var showAddSub = false
 
     var subcategories: [Subcategory] {
-        category.subcategories.sorted(by: { $0.order < $1.order })
+        category.subcategories.sorted { $0.order < $1.order }
     }
 
     var body: some View {
@@ -78,9 +73,8 @@ struct SubcategoryListView: View {
                 HStack {
                     Text(category.name)
                     Spacer()
-                    Button(action: { showAddSubcategory = true }) {
-                        Image(systemName: "plus")
-                    }
+                    Button { showAddSub = true }
+                    label: { Image(systemName: "plus") }
                 }
             ) {
                 ForEach(subcategories) { sub in
@@ -89,24 +83,23 @@ struct SubcategoryListView: View {
             }
         }
         .navigationTitle("Subcategories")
-        .sheet(isPresented: $showAddSubcategory) {
+        .sheet(isPresented: $showAddSub) {
             AddSubcategoryView(category: category)
+                .environmentObject(dc)
         }
     }
 }
 
+
 // MARK: - Add Category View
 struct AddCategoryView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Category.order, order: .forward) private var categories: [Category]
+    @EnvironmentObject private var dc: DataController
+    @Environment(\.dismiss)   private var dismiss
     @State private var name: String = ""
 
     var body: some View {
         NavigationView {
-            Form {
-                TextField("Category Name", text: $name)
-            }
+            Form { TextField("Category Name", text: $name) }
             .navigationTitle("New Category")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -114,9 +107,7 @@ struct AddCategoryView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let nextOrder = (categories.map(\ .order).max() ?? -1) + 1
-                        let cat = Category(name: name, order: nextOrder)
-                        modelContext.insert(cat)
+                        dc.addCategory(name: name)
                         dismiss()
                     }
                     .disabled(name.isEmpty)
@@ -126,18 +117,16 @@ struct AddCategoryView: View {
     }
 }
 
+
 // MARK: - Add Project View
 struct AddProjectView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Project.order, order: .forward) private var projects: [Project]
+    @EnvironmentObject private var dc: DataController
+    @Environment(\.dismiss)   private var dismiss
     @State private var name: String = ""
 
     var body: some View {
         NavigationView {
-            Form {
-                TextField("Project Name", text: $name)
-            }
+            Form { TextField("Project Name", text: $name) }
             .navigationTitle("New Project")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -145,9 +134,7 @@ struct AddProjectView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let nextOrder = (projects.map(\ .order).max() ?? -1) + 1
-                        let proj = Project(name: name, order: nextOrder)
-                        modelContext.insert(proj)
+                        dc.addProject(name: name)
                         dismiss()
                     }
                     .disabled(name.isEmpty)
@@ -157,18 +144,17 @@ struct AddProjectView: View {
     }
 }
 
+
 // MARK: - Add Subcategory View
 struct AddSubcategoryView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var dc: DataController
+    @Environment(\.dismiss)   private var dismiss
     let category: Category
     @State private var name: String = ""
 
     var body: some View {
         NavigationView {
-            Form {
-                TextField("Subcategory Name", text: $name)
-            }
+            Form { TextField("Subcategory Name", text: $name) }
             .navigationTitle("New Subcategory")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -176,11 +162,7 @@ struct AddSubcategoryView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let existing = category.subcategories
-                        let nextOrder = (existing.map(\ .order).max() ?? -1) + 1
-                        let sub = Subcategory(name: name, order: nextOrder)
-                        category.subcategories.append(sub)
-                        modelContext.insert(sub)
+                        dc.addSubcategory(to: category, name: name)
                         dismiss()
                     }
                     .disabled(name.isEmpty)
@@ -189,6 +171,7 @@ struct AddSubcategoryView: View {
         }
     }
 }
+
 
 // MARK: - Preview
 #Preview {

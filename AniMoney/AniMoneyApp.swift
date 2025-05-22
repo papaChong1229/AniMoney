@@ -10,13 +10,13 @@ import SwiftData
 
 @main
 struct AniMoneyApp: App {
+    @StateObject private var dataController = try! DataController()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(dataController)
         }
-        .modelContainer(
-            for: [Category.self, Subcategory.self, Project.self, Transaction.self]
-        )
     }
 }
 
