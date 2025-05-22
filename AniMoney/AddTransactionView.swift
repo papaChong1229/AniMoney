@@ -34,7 +34,7 @@ struct AddTransactionView: View {
             // 当 categories 为空，或者索引越界
             return []
         }
-        return categories[selectedCategoryIndex].subcategories
+        return categories[selectedCategoryIndex].subcategories.sorted{$0.order < $1.order}
     }
 
     
@@ -43,12 +43,12 @@ struct AddTransactionView: View {
             Form {
                 // MARK: 1. 分類選擇
                 Section("Category") {
-                    Picker("大類", selection: $selectedCategoryIndex) {
+                    Picker("Category", selection: $selectedCategoryIndex) {
                         ForEach(categories.indices, id: \.self) { i in
                             Text(categories[i].name).tag(i)
                         }
                     }
-                    Picker("小類", selection: $selectedSubcategoryIndex) {
+                    Picker("Subcategory", selection: $selectedSubcategoryIndex) {
                         ForEach(subcategories.indices, id: \.self) { j in
                             Text(subcategories[j].name).tag(j)
                         }

@@ -3,8 +3,8 @@ import SwiftData
 
 struct ContentView: View {
     // 直接用 @Query 拿現有的 Category & Project
-    @Query(sort: \Category.name, order: .forward) private var categories: [Category]
-    @Query(sort: \Project.name, order: .forward)   private var projects:   [Project]
+    @Query(sort: \Category.order, order: .forward) private var categories: [Category]
+    @Query(sort: \Project.order, order: .forward)   private var projects:   [Project]
 
     // SwiftData 的 ModelContext
     @Environment(\.modelContext) private var modelContext
@@ -25,7 +25,7 @@ struct ContentView: View {
                 .tag(1)
                 .tabItem {
                     Image(systemName: "square.grid.2x2.fill")
-                    Text("Categories")
+                    Text("Classification")
                 }
 
             // ← 這裡改成＋號圖示
