@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct AniMoneyApp: App {
@@ -13,5 +14,11 @@ struct AniMoneyApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(
+            for: [Category.self, Subcategory.self, Project.self, Transaction.self]
+        )
     }
 }
+
+
+

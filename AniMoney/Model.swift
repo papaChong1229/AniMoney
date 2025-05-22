@@ -6,43 +6,83 @@
 //
 
 import Foundation
+import SwiftData
 
-/// 小類別
-struct Subcategory: Identifiable, Codable, Hashable {
-    var id: UUID = .init()
+@Model
+final class Subcategory {
+    @Attribute(.unique) var id: UUID
     var name: String
+    var order: Int
+
+    init(name: String, order: Int) {
+        // 把 id、name 都放到這裡初始化
+        self.id = UUID()
+        self.name = name
+        self.order = order
+    }
 }
 
-/// 大類別
-struct Category: Identifiable, Codable, Hashable {
-    var id: UUID = .init()
+@Model
+final class Category {
+    @Attribute(.unique) var id: UUID
     var name: String
-    /// 底下包含的小類
+    var order: Int
+
+    @Relationship(deleteRule: .cascade)
     var subcategories: [Subcategory]
+
+    init(name: String, order: Int, subcategories: [Subcategory] = []) {
+        // 同樣在 init 裡設預設
+        self.id = UUID()
+        self.name = name
+        self.subcategories = subcategories
+        self.order = order
+    }
 }
 
-struct Project: Identifiable, Codable, Hashable {
-    var id: UUID = .init()
+@Model
+final class Project {
+    @Attribute(.unique) var id: UUID
     var name: String
+    var order: Int
+
+    init(name: String, order: Int) {
+        self.id = UUID()
+        self.name = name
+        self.order = order
+    }
 }
 
-struct Transaction {
-    /// 所屬大類、小類
-    var category: Category
-    var subcategory: Subcategory
-    
-    /// 金額，使用 Decimal 避免浮點誤差
+@Model
+final class Transaction {
+    @Attribute(.unique) var id: UUID
+
+    @Relationship var category: Category
+    @Relationship var subcategory: Subcategory
+
     var amount: Int
-    
-    /// 交易日期
     var date: Date
-    
-    /// 備註或說明（可為空）
     var note: String?
-    
-    /// 照片清單（存 URL 或本地檔案路徑；可為空）
-    var photoURLs: [URL]?
-    
-    /// 可選專案
-    var project: Project?
+    var photoData: Data?
+
+    @Relationship var project: Project?
+
+    init(
+        category: Category,
+        subcategory: Subcategory,
+        amount: Int,
+        date: Date,
+        note: String? = nil,
+        photoData: Data? = nil,
+        project: Project? = nil
+    ) {
+        self.id = UUID()
+        self.category = category
+        self.subcategory = subcategory
+        self.amount = amount
+        self.date = date
+        self.note = note
+        self.photoData = photoData
+        self.project = project
+    }
 }
