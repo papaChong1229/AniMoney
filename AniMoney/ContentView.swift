@@ -21,11 +21,11 @@ struct ContentView: View {
                     Text("Home")
                 }
 
-            CategoryView()
+            CategoryManagerView()
                 .tag(1)
                 .tabItem {
                     Image(systemName: "square.grid.2x2.fill")
-                    Text("Category")
+                    Text("Categories")
                 }
 
             // ← 這裡改成＋號圖示
