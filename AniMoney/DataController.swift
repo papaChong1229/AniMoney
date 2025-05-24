@@ -3,153 +3,384 @@ import SwiftData
 
 @MainActor
 final class DataController: ObservableObject {
-    /// 持有 SwiftData 容器
     let container: ModelContainer
 
-    /// 暴露给 UI 的数据
     @Published private(set) var categories:   [Category]    = []
     @Published private(set) var projects:     [Project]     = []
     @Published private(set) var transactions: [Transaction] = []
 
-    init() {
-        // 1. 建立 container（variadic 參數，非陣列）
-        container = try! ModelContainer(
-            for: Category.self,
-                 Subcategory.self,
-                 Project.self,
-                 Transaction.self
+    init() throws {
+        // 確保所有 Model 都已註冊
+        container = try ModelContainer(
+            for: Category.self, Subcategory.self, Project.self, Transaction.self
         )
-
-        // 2. 種子初始化：首次啟動時塞入預設資料
         seedDefaultDataIfNeeded()
-
-        // 3. 把所有資料 load 到 Published 屬性
         fetchAll()
     }
 
-    // MARK: - Seed 預設資料
     private func seedDefaultDataIfNeeded() {
-        // 先用簡單的 FetchDescriptor 檢查是否已有 Category 或 Project
-        let catCount = (try? container.mainContext.fetch(
-            FetchDescriptor<Category>()
-        ).count) ?? 0
-        let projCount = (try? container.mainContext.fetch(
-            FetchDescriptor<Project>()
-        ).count) ?? 0
+        let ctx = container.mainContext
+        guard ((try? ctx.fetch(FetchDescriptor<Category>()).count) ?? 0) == 0,
+              ((try? ctx.fetch(FetchDescriptor<Project>()).count) ?? 0) == 0 else { return }
 
-        // 若都還沒資料，就插入預設
-        guard catCount == 0, projCount == 0 else {
-            return
-        }
+        // --- Seed Data ---
+        // 創建 Subcategories
+        let breakfast = Subcategory(name: "早餐", order: 0)
+        let lunch = Subcategory(name: "午餐", order: 1)
+        let dinner = Subcategory(name: "晚餐", order: 2)
+        let snack = Subcategory(name: "點心", order: 3)
 
-        // 建立預設大類 + 小類
-        let food = Category(
-            name: "食品酒水",
-            order: 0,
-            subcategories: [
-                Subcategory(name: "早餐", order: 0),
-                Subcategory(name: "午餐", order: 1),
-                Subcategory(name: "晚餐", order: 2),
-                Subcategory(name: "點心", order: 3),
-            ]
-        )
-        let transport = Category(
-            name: "交通出行",
-            order: 1,
-            subcategories: [
-                Subcategory(name: "公車", order: 0),
-                Subcategory(name: "捷運", order: 1),
-                Subcategory(name: "計程車", order: 2),
-            ]
-        )
+        // 創建 Category 並關聯 Subcategories
+        let food = Category(name: "食品酒水", order: 0, subcategories: [breakfast, lunch, dinner, snack])
 
-        // 建立預設專案
+        let bus = Subcategory(name: "公車", order: 0)
+        let mrt = Subcategory(name: "捷運", order: 1)
+        let taxi = Subcategory(name: "計程車", order: 2)
+        let transport = Category(name: "交通出行", order: 1, subcategories: [bus, mrt, taxi])
+        
         let projA = Project(name: "專案 A", order: 0)
         let projB = Project(name: "專案 B", order: 1)
+        // --- End Seed Data ---
 
-        // 插入到 context → SwiftData 會自動儲存到底層
-        let ctx = container.mainContext
+        // 插入到 Context
+        // 因為 Category 的 subcategories 關係是 .cascade，插入 Category 時，其包含的 Subcategory 也會被插入
         ctx.insert(food)
         ctx.insert(transport)
         ctx.insert(projA)
         ctx.insert(projB)
+        
+        do {
+            try ctx.save()
+            print("🌱 Default data seeded and context saved.")
+        } catch {
+            print("❌ DataController.seedDefaultDataIfNeeded: Failed to save context after seeding: \(error)")
+        }
     }
 
-    /// 从数据库读取最新数据
     func fetchAll() {
         do {
-            let catDesc = FetchDescriptor<Category>(sortBy: [SortDescriptor(\.order)])
-            let projDesc = FetchDescriptor<Project>(sortBy: [SortDescriptor(\.order)])
-            let txDesc = FetchDescriptor<Transaction>(
-                sortBy: [SortDescriptor(\.date, order: .forward)]
-            )
+            // Fetch Categories with their subcategories pre-fetched if needed (though usually automatic)
+            var catDesc  = FetchDescriptor<Category>(sortBy: [SortDescriptor(\Category.order)])
+            // catDesc.relationshipKeyPathsForPrefetching = [\.subcategories] // Optional: explicitly prefetch
+
+            let projDesc = FetchDescriptor<Project>(sortBy: [SortDescriptor(\Project.order)])
+            let txDesc   = FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\Transaction.date, order: .reverse)])
 
             categories   = try container.mainContext.fetch(catDesc)
             projects     = try container.mainContext.fetch(projDesc)
             transactions = try container.mainContext.fetch(txDesc)
+            print("🔁 Data fetched. Categories: \(categories.count), Projects: \(projects.count), Transactions: \(transactions.count)")
         } catch {
-            print("⚠️ DataController.fetchAll error:", error)
+            print("⚠️ DataController.fetchAll error: \(error)")
         }
     }
 
-    // MARK: — CRUD for Category
+    private func saveContext() -> Bool {
+        // Check for unsaved changes before attempting to save
+        if container.mainContext.hasChanges {
+            do {
+                try container.mainContext.save()
+                print("✅ Context saved successfully.")
+                return true
+            } catch {
+                print("❌ DataController: Failed to save context: \(error)")
+                // container.mainContext.rollback() // Consider if appropriate for your error handling strategy
+                return false
+            }
+        } else {
+            print("ℹ️ Context has no changes to save.")
+            return true // No changes, so "saving" is trivially successful
+        }
+    }
+
+    // MARK: - Category CRUD & Reassignment
     func addCategory(name: String) {
         let nextOrder = (categories.map(\.order).max() ?? -1) + 1
-        let cat = Category(name: name, order: nextOrder)
+        let cat = Category(name: name, order: nextOrder) // Subcategories is empty by default
         container.mainContext.insert(cat)
-        fetchAll()
+        if saveContext() {
+            fetchAll()
+        }
     }
 
-    func deleteCategory(_ cat: Category) {
-        container.mainContext.delete(cat)
-        fetchAll()
+    func reassignTransactions(from oldCat: Category, to newCat: Category) -> Bool {
+        let oldCatID = oldCat.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.category.id == oldCatID })
+        
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            if relatedTransactions.isEmpty {
+                return saveContext() // No transactions, "success"
+            }
+
+            // IMPORTANT: Since Subcategory doesn't have a direct backlink to Category in your model,
+            // we assume newCat.subcategories are correctly managed and fetched.
+            guard let firstSubcategoryOfNewCat = newCat.subcategories.sorted(by: { $0.order < $1.order }).first else {
+                print("❌ Error: Target category '\(newCat.name)' has no subcategories. Transactions cannot be reassigned without a subcategory.")
+                return false
+            }
+
+            for tx in relatedTransactions {
+                tx.category = newCat // Reassign category
+                tx.subcategory = firstSubcategoryOfNewCat // Reassign to the first subcategory of the new category
+            }
+            
+            if saveContext() {
+                print("✅ Transactions reassigned from '\(oldCat.name)' to '\(newCat.name)'.")
+                // fetchAll() might be called by subsequent delete or view update
+                return true
+            }
+            return false
+        } catch {
+            print("❌ Error fetching/reassigning transactions for category: \(error)")
+            return false
+        }
+    }
+
+    // Deletes category and its subcategories (due to .cascade) AND related transactions
+    func deleteCategoryWithCascade(_ category: Category) {
+        let categoryID = category.id
+        // First, delete transactions related to this category
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.category.id == categoryID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            for tx in relatedTransactions {
+                container.mainContext.delete(tx)
+            }
+        } catch {
+            print("❌ Error fetching/deleting transactions for cascade delete of category '\(category.name)': \(error)")
+            // Decide if you want to proceed with category deletion if transactions fail
+        }
+        
+        // Then delete the category itself. Its subcategories will be deleted due to the .cascade rule.
+        container.mainContext.delete(category)
+        
+        if saveContext() {
+            fetchAll()
+        }
     }
     
-    func addSubcategory(to category: Category, name: String) {
-        let nextOrder = (category.subcategories.map(\.order).max() ?? -1) + 1
-        let sub = Subcategory(name: name, order: nextOrder)
-        // 把它 append 到關聯裡，並 insert
-        category.subcategories.append(sub)
-        container.mainContext.insert(sub)
-        fetchAll()
+    // Deletes category and its subcategories (due to .cascade).
+    // Assumes transactions are handled separately (e.g., reassigned).
+    func deleteCategory(_ category: Category) {
+        container.mainContext.delete(category) // Subcategories deleted by .cascade
+        if saveContext() {
+            fetchAll()
+        }
     }
 
-    // MARK: — CRUD for Project
+    // MARK: - Subcategory CRUD & Reassignment
+    func addSubcategory(to category: Category, name: String) {
+        // Find the managed instance of the category
+        guard let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category else {
+            print("❌ Error: Category not found for adding subcategory.")
+            return
+        }
+        
+        let nextOrder = (managedCategory.subcategories.map(\.order).max() ?? -1) + 1
+        let newSub = Subcategory(name: name, order: nextOrder)
+        // SwiftData automatically handles inserting `newSub` when it's added to a managed `Category`'s relationship collection.
+        // No need to explicitly insert `newSub` if it's added to `managedCategory.subcategories` *before* save.
+        managedCategory.subcategories.append(newSub)
+        
+        if saveContext() {
+            fetchAll() // Re-fetch to update UI, including the category's subcategories list
+        }
+    }
+
+    func reassignTransactions(from oldSub: Subcategory, to newSub: Subcategory) -> Bool {
+        let oldSubID = oldSub.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.subcategory.id == oldSubID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            if relatedTransactions.isEmpty { return saveContext() } // No transactions, "success"
+            
+            for tx in relatedTransactions {
+                tx.subcategory = newSub
+            }
+            if saveContext() {
+                print("✅ Transactions reassigned for subcategory.")
+                return true
+            }
+            return false
+        } catch {
+            print("❌ Error reassigning transactions for subcategory: \(error)")
+            return false
+        }
+    }
+    
+    // Deletes a specific subcategory AND its related transactions.
+    // Also removes it from its parent category's list.
+    func deleteSubcategoryAndRelatedTransactions(from category: Category, subcategoryToDelete: Subcategory) {
+        let subcategoryID = subcategoryToDelete.id
+        // Delete related transactions
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.subcategory.id == subcategoryID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            for tx in relatedTransactions {
+                container.mainContext.delete(tx)
+            }
+        } catch {
+            print("❌ Error fetching/deleting transactions for subcategory: \(error)")
+        }
+
+        // Remove subcategory from parent category's list and delete the subcategory instance
+        if let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category {
+            managedCategory.subcategories.removeAll { $0.id == subcategoryID }
+            // Deleting the subcategory instance itself.
+            // If it was only referenced by this category, SwiftData's cascade from Category to Subcategory
+            // would also handle it if the *Category* was deleted, but here we are deleting a specific Subcategory.
+            // If `Subcategory` instances are unique and not shared, this is fine.
+            // The `.cascade` on `Category.subcategories` means if the `Category` is deleted, `Subcategory` is deleted.
+            // It does *not* mean if a `Subcategory` is removed from the array, it's automatically deleted from the store.
+            // So, we need to explicitly delete it.
+            if let subToDeleteInContext = container.mainContext.model(for: subcategoryToDelete.persistentModelID) as? Subcategory {
+                 container.mainContext.delete(subToDeleteInContext)
+            } else {
+                // If it's already been deleted or not found, we can just ensure it's removed from the array.
+                 print("ℹ️ Subcategory to delete not found in context, might have been already processed.")
+            }
+        } else {
+            print("❌ Parent category not found for deleting subcategory.")
+        }
+        
+        if saveContext() {
+            fetchAll()
+        }
+    }
+    
+    // Deletes a subcategory. Assumes transactions are handled.
+    // Removes it from its parent category's list.
+    func deleteSubcategory(_ subcategoryToDelete: Subcategory, from category: Category) {
+         if let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category {
+            managedCategory.subcategories.removeAll { $0.id == subcategoryToDelete.id }
+             if let subToDeleteInContext = container.mainContext.model(for: subcategoryToDelete.persistentModelID) as? Subcategory {
+                 container.mainContext.delete(subToDeleteInContext)
+             }
+        }
+        if saveContext() {
+            fetchAll()
+        }
+    }
+
+
+    // MARK: - Project CRUD (similar logic for saveContext and fetchAll)
     func addProject(name: String) {
         let nextOrder = (projects.map(\.order).max() ?? -1) + 1
         let proj = Project(name: name, order: nextOrder)
         container.mainContext.insert(proj)
-        fetchAll()
+        if saveContext() { fetchAll() }
     }
 
-    func deleteProject(_ proj: Project) {
-        container.mainContext.delete(proj)
-        fetchAll()
+    func reassignTransactions(from oldProj: Project, to newProj: Project) -> Bool {
+        let oldProjID = oldProj.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.project?.id == oldProjID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            if relatedTransactions.isEmpty { return saveContext() }
+            for tx in relatedTransactions { tx.project = newProj }
+            return saveContext()
+        } catch { print("❌ Error reassigning transactions for project: \(error)"); return false }
     }
 
-    // MARK: — CRUD for Transaction
+    func deleteProjectAndNilOutTransactions(_ project: Project) {
+        let projectID = project.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.project?.id == projectID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            for tx in relatedTransactions { tx.project = nil }
+        } catch { print("❌ Error niling transactions for project: \(error)") }
+        container.mainContext.delete(project)
+        if saveContext() { fetchAll() }
+    }
+
+    func deleteProjectWithCascade(_ project: Project) { // Deletes project AND its transactions
+        let projectID = project.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.project?.id == projectID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            for tx in relatedTransactions { container.mainContext.delete(tx) }
+        } catch { print("❌ Error deleting transactions for project cascade: \(error)") }
+        container.mainContext.delete(project)
+        if saveContext() { fetchAll() }
+    }
+    
+    func deleteProject(_ project: Project) { // Deletes project, assumes transactions handled
+        container.mainContext.delete(project)
+        if saveContext() { fetchAll() }
+    }
+
+    // MARK: - Transaction CRUD
+    // MARK: - Transaction CRUD
     func addTransaction(
         category: Category,
         subcategory: Subcategory,
         amount: Int,
         date: Date,
-        note: String?,
-        project: Project?
+        note: String? = nil,
+        photoData: Data? = nil, // <--- 在這裡加上 photoData 參數
+        project: Project? = nil
     ) {
+        // Ensure we are using managed instances for relationships
+        guard let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category else {
+            print("❌ AddTransaction Error: Category not managed."); return
+        }
+        // Crucially, check if the subcategory belongs to THIS managedCategory instance's subcategories array.
+        guard let managedSubcategory = managedCategory.subcategories.first(where: { $0.id == subcategory.id }) else {
+            print("❌ AddTransaction Error: Subcategory '\(subcategory.name)' does not belong to category '\(managedCategory.name)' or is not managed correctly.")
+            if let _ = container.mainContext.model(for: subcategory.persistentModelID) as? Subcategory {
+                print("ℹ️ Subcategory exists in context but not in parent's list. This indicates a data integrity issue or incorrect usage.")
+            }
+            return
+        }
+        
+        var managedProject: Project? = nil
+        if let proj = project {
+            managedProject = projects.first(where: { $0.id == proj.id }) ?? container.mainContext.model(for: proj.persistentModelID) as? Project
+            if managedProject == nil { print("⚠️ AddTransaction Warning: Project not found in managed context, transaction will have nil project."); }
+        }
+
         let tx = Transaction(
-            category:    category,
-            subcategory: subcategory,
-            amount:      amount,
-            date:        date,
-            note:        note,
-            project:     project
+            category: managedCategory,
+            subcategory: managedSubcategory,
+            amount: amount,
+            date: date,
+            note: note,
+            photoData: photoData, // <--- 在這裡傳遞 photoData 給 Transaction 的 init
+            project: managedProject
         )
         container.mainContext.insert(tx)
-        fetchAll()
+        if saveContext() {
+            fetchAll()
+        }
     }
 
-    func deleteTransaction(_ tx: Transaction) {
-        container.mainContext.delete(tx)
-        fetchAll()
+    func deleteTransaction(_ transaction: Transaction) {
+        container.mainContext.delete(transaction)
+        if saveContext() {
+            fetchAll()
+        }
+    }
+    
+    // MARK: - Helper Predicates (No change needed here from previous version)
+    func hasTransactions(category: Category) -> Bool {
+        let categoryID = category.id
+        let desc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.category.id == categoryID })
+        let count = (try? container.mainContext.fetchCount(desc)) ?? 0
+        return count > 0
+    }
+
+    func hasTransactions(subcategory: Subcategory) -> Bool {
+        let subcategoryID = subcategory.id
+        let desc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.subcategory.id == subcategoryID })
+        let count = (try? container.mainContext.fetchCount(desc)) ?? 0
+        return count > 0
+    }
+    
+    func hasTransactions(project: Project) -> Bool {
+        let projectID = project.id
+        let desc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.project?.id == projectID })
+        let count = (try? container.mainContext.fetchCount(desc)) ?? 0
+        return count > 0
     }
 }
