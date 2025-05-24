@@ -383,4 +383,25 @@ final class DataController: ObservableObject {
         let count = (try? container.mainContext.fetchCount(desc)) ?? 0
         return count > 0
     }
+    
+    func clearProjectFromTransactions(of projectToClear: Project) -> Bool {
+        let projectID = projectToClear.id
+        let txDesc = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.project?.id == projectID })
+        do {
+            let relatedTransactions = try container.mainContext.fetch(txDesc)
+            if relatedTransactions.isEmpty {
+                // No transactions to nil, but we still need to ensure context is saved if there were other pending changes.
+                // If saveContext only saves if there are changes, this is fine.
+                // Or, we can consider this a success if there's nothing to do.
+                return true // Or return saveContext() if you want to ensure any other pending changes are saved
+            }
+            for tx in relatedTransactions {
+                tx.project = nil
+            }
+            return saveContext() // Save changes (nilling out projects)
+        } catch {
+            print("❌ DataController: Error clearing project from transactions for project '\(projectToClear.name)': \(error)")
+            return false
+        }
+    }
 }
