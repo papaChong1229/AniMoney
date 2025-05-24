@@ -16,7 +16,7 @@ struct ContentView: View {
                     Text("Home")
                 }
 
-            CategoryManagerView()
+            MainFinanceManagementView()
                 .tag(1)
                 .tabItem {
                     Image(systemName: "square.grid.2x2.fill")
