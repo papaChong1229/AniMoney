@@ -7,8 +7,7 @@ struct SubcategoryTransactionsView: View {
     let subcategory: Subcategory
     let parentCategory: Category
     
-    @State private var selectedTransaction: Transaction?
-    @State private var showingEditSheet = false
+    @State private var editingTransaction: Transaction?
     
     // 計算這個子類別的所有交易，按日期排序
     private var transactions: [Transaction] {
@@ -79,8 +78,7 @@ struct SubcategoryTransactionsView: View {
                 } else {
                     ForEach(transactions) { transaction in
                         Button {
-                            selectedTransaction = transaction
-                            showingEditSheet = true
+                            editingTransaction = transaction
                         } label: {
                             SubcategoryTransactionRow(transaction: transaction)
                         }
@@ -92,11 +90,9 @@ struct SubcategoryTransactionsView: View {
         }
         .navigationTitle(subcategory.name)
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showingEditSheet) {
-            if let transaction = selectedTransaction {
-                EditTransactionView(transaction: transaction)
-                    .environmentObject(dataController)
-            }
+        .sheet(item: $editingTransaction) { transaction in
+            EditTransactionView(transaction: transaction)
+                .environmentObject(dataController)
         }
     }
     

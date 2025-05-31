@@ -1,10 +1,3 @@
-//
-//  ProjectDetailView.swift
-//  AniMoney
-//
-//  Created by 陳軒崇 on 2025/5/31.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -18,8 +11,7 @@ struct ProjectDetailView: View {
     @State private var showingReassignProjectSheet = false
     @State private var targetProjectIDForReassignment: PersistentIdentifier? // Can be nil for "No Project"
     
-    @State private var selectedTransaction: Transaction?
-    @State private var showingEditSheet = false
+    @State private var editingTransaction: Transaction?
 
     // 計算該專案的所有交易，按日期排序
     private var projectTransactions: [Transaction] {
@@ -144,8 +136,7 @@ struct ProjectDetailView: View {
                 } else {
                     ForEach(projectTransactions) { transaction in
                         Button {
-                            selectedTransaction = transaction
-                            showingEditSheet = true
+                            editingTransaction = transaction
                         } label: {
                             ProjectTransactionRow(transaction: transaction)
                         }
@@ -194,11 +185,9 @@ struct ProjectDetailView: View {
                      }
              }
         }
-        .sheet(isPresented: $showingEditSheet) {
-            if let transaction = selectedTransaction {
-                EditTransactionView(transaction: transaction)
-                    .environmentObject(dataController)
-            }
+        .sheet(item: $editingTransaction) { transaction in
+            EditTransactionView(transaction: transaction)
+                .environmentObject(dataController)
         }
     }
     

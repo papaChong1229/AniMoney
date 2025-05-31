@@ -179,8 +179,7 @@ struct SubcategoryListView: View {
     @State private var targetSubcategoryIDForReassignment: PersistentIdentifier?
     @State private var showingAddSubcategorySheet = false
     
-    @State private var selectedTransaction: Transaction?
-    @State private var showingEditSheet = false
+    @State private var editingTransaction: Transaction?
 
     // 計算該類別的所有交易，按日期排序
     private var categoryTransactions: [Transaction] {
@@ -340,8 +339,7 @@ struct SubcategoryListView: View {
                 } else {
                     ForEach(categoryTransactions) { transaction in
                         Button {
-                            selectedTransaction = transaction
-                            showingEditSheet = true
+                            editingTransaction = transaction
                         } label: {
                             CategoryTransactionRow(transaction: transaction)
                         }
@@ -385,11 +383,9 @@ struct SubcategoryListView: View {
                 }.environmentObject(dataController)
             }
         }
-        .sheet(isPresented: $showingEditSheet) {
-            if let transaction = selectedTransaction {
-                EditTransactionView(transaction: transaction)
-                    .environmentObject(dataController)
-            }
+        .sheet(item: $editingTransaction) { transaction in
+            EditTransactionView(transaction: transaction)
+                .environmentObject(dataController)
         }
     }
     
@@ -507,7 +503,6 @@ struct CategoryTransactionRow: View {
         .padding(.vertical, 6)
     }
 }
-
 struct AddSubcategoryView: View { /* ... (same as previous version) ... */
     @EnvironmentObject var dataController: DataController
     @Environment(\.dismiss) var dismiss
