@@ -14,102 +14,376 @@ struct MainFinanceManagementView: View {
     }
 }
 
-// MARK: - Category Manager View
 struct CategoryManagerView: View {
     @EnvironmentObject var dataController: DataController
     @State private var showingAddCategorySheet = false
-
-    @State private var categoryToAction: Category?
-    @State private var showingConfirmDirectDeleteCatDialog = false
-    @State private var showingReassignCategorySheet = false
-    @State private var targetCategoryIDForReassignment: PersistentIdentifier?
-
     @State private var showingAddProjectSheet = false
-
+    
     var body: some View {
-        List {
-            // MARK: Categories Section
-            Section(header: Text("Categories").font(.title3).padding(.bottom, 2)) {
-                if dataController.categories.isEmpty {
-                    Text("No categories yet. Tap '+' to add one.").foregroundColor(.secondary)
-                }
-                ForEach(dataController.categories.sorted(by: { $0.order < $1.order }), id: \.id) { category in
-                    NavigationLink(destination: SubcategoryListView(category: category).environmentObject(dataController)) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(category.name).font(.headline)
-                                Spacer()
-                                let hasAnyTransactions = dataController.hasTransactions(category: category) ||
-                                                         category.subcategories.contains(where: { dataController.hasTransactions(subcategory: $0) })
-                                Text(hasAnyTransactions ? "(Has Tx)" : "(No Tx)").font(.caption2).foregroundColor(.gray)
-                            }
-                            Text("\(category.subcategories.count) subcategories").font(.caption).foregroundColor(.secondary)
-                        }.padding(.vertical, 4)
-                    }
-                    .swipeActions {
-                        Button(role: .destructive) {
-                            self.categoryToAction = category
-                            let hasTx = dataController.hasTransactions(category: category) || category.subcategories.contains { dataController.hasTransactions(subcategory: $0) }
-                            if hasTx {
-                                targetCategoryIDForReassignment = dataController.categories.first(where: { $0.id != category.id && !$0.subcategories.isEmpty })?.id
-                                self.showingReassignCategorySheet = true
-                            } else {
-                                self.showingConfirmDirectDeleteCatDialog = true
-                            }
-                        } label: { Label("Delete", systemImage: "trash") }
-                    }
+        VStack(spacing: 0) {
+            // 自定義導航欄
+            HStack {
+                Text("分類管理")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Button {
+                    showingAddCategorySheet = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.blue)
                 }
             }
-
-            // MARK: Projects Section
-            Section(header: Text("Projects").font(.title3).padding(.vertical, 2)) {
-                if dataController.projects.isEmpty {
-                    Text("No projects yet. Tap '+' to add one.").foregroundColor(.secondary)
-                }
-                ForEach(dataController.projects.sorted(by: { $0.order < $1.order }), id: \.id) { project in
-                    NavigationLink(destination: ProjectDetailView(project: project).environmentObject(dataController)) {
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            .background(Color(.systemGroupedBackground))
+            
+            // 主要內容
+            ScrollView {
+                LazyVStack(spacing: 20) {
+                    // 類別管理區域
+                    VStack(alignment: .leading, spacing: 16) {
+                        // 類別區域標題
                         HStack {
-                            Text(project.name)
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.grid.2x2.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.title2)
+                                Text("類別管理")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.primary)
+                            }
+                            
                             Spacer()
-                            Text("(\(dataController.hasTransactions(project: project) ? "Has Tx" : "No Tx"))").font(.caption2).foregroundColor(.gray)
+                            
+                            Text("\(dataController.categories.count) 個類別")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.orange.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                        .padding(.horizontal)
+                        
+                        // 類別卡片列表
+                        ForEach(dataController.categories.sorted { $0.order < $1.order }) { category in
+                            CategoryCard(category: category)
+                                .environmentObject(dataController)
+                                .padding(.horizontal)
+                        }
+                    }
+                    
+                    // 分隔線區域
+                    VStack(spacing: 12) {
+                        HStack {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.3))
+                                .frame(height: 1)
+                            
+                            Image(systemName: "circle.fill")
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .font(.caption2)
+                            
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.3))
+                                .frame(height: 1)
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                    
+                    // 專案管理區域
+                    VStack(alignment: .leading, spacing: 16) {
+                        // 專案區域標題
+                        HStack {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(.purple)
+                                    .font(.title2)
+                                Text("專案管理")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Spacer()
+                            
+                            Text("\(dataController.projects.count) 個專案")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.purple.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                        .padding(.horizontal)
+                        
+                        // 專案描述
+                        Text("專案讓你追蹤跨類別的相關支出，例如旅行、裝修或特殊活動的花費。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                            .padding(.bottom, 4)
+                        
+                        // 專案網格
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 12) {
+                            ForEach(dataController.projects.sorted { $0.name < $1.name }) { project in
+                                ProjectCard(project: project)
+                                    .environmentObject(dataController)
+                            }
+                            
+                            // 新增專案按鈕
+                            Button {
+                                showingAddProjectSheet = true
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.purple)
+                                    
+                                    Text("新增專案")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.purple)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 80)
+                                .background(Color.purple.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.purple.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical, 20)
+                    .background(Color(.systemBackground).opacity(0.7))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
+                }
+                .padding(.top, 8)
+            }
+        }
+        .background(Color(.systemGroupedBackground))
+        .sheet(isPresented: $showingAddCategorySheet) {
+            AddCategoryView()
+                .environmentObject(dataController)
+        }
+        .sheet(isPresented: $showingAddProjectSheet) {
+            AddProjectView()
+                .environmentObject(dataController)
+        }
+    }
+}
+
+// MARK: - 類別卡片
+struct CategoryCard: View {
+    @EnvironmentObject var dataController: DataController
+    @Bindable var category: Category
+    
+    // 計算類別統計
+    private var categoryStats: (transactions: Int, amount: Int) {
+        let transactions = dataController.transactions.filter { $0.category.id == category.id }
+        return (transactions: transactions.count, amount: transactions.reduce(0) { $0 + $1.amount })
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 類別標題和統計
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(category.name)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Text("\(category.subcategories.count) 個子類別")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(categoryStats.transactions) 筆")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text("$\(categoryStats.amount)")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            // 子類別預覽
+            if !category.subcategories.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(category.subcategories.sorted { $0.order < $1.order }.prefix(5)) { subcategory in
+                            Text(subcategory.name)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue)
+                                .clipShape(Capsule())
+                        }
+                        
+                        if category.subcategories.count > 5 {
+                            Text("+\(category.subcategories.count - 5)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.2))
+                                .clipShape(Capsule())
                         }
                     }
                 }
             }
-        }
-        .navigationTitle("Manage Finance Items")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button { showingAddCategorySheet = true } label: { Label("Add Category", systemImage: "folder.badge.plus") }
-                    Button { showingAddProjectSheet = true } label: { Label("Add Project", systemImage: "doc.badge.plus") }
-                } label: { Label("Add Item", systemImage: "plus.circle.fill") }
+            
+            // 操作按鈕
+            HStack {
+                NavigationLink(destination: SubcategoryListView(category: category).environmentObject(dataController)) {
+                    HStack {
+                        Image(systemName: "square.grid.2x2")
+                        Text("管理子類別")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(Capsule())
+                }
+                
+                Spacer()
+                
+                NavigationLink(destination: CategoryTransactionsView(category: category).environmentObject(dataController)) {
+                    HStack {
+                        Image(systemName: "list.bullet")
+                        Text("查看交易")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.1))
+                    .clipShape(Capsule())
+                }
             }
         }
-        .sheet(isPresented: $showingAddCategorySheet) { AddCategoryView().environmentObject(dataController) }
-        .sheet(isPresented: $showingAddProjectSheet) { AddProjectView().environmentObject(dataController) }
-        .confirmationDialog(
-            "Delete Category: \"\(categoryToAction?.name ?? "")\"?",
-            isPresented: $showingConfirmDirectDeleteCatDialog,
-            presenting: categoryToAction
-        ) { catAction in
-            Button("Delete Category and its Subcategories", role: .destructive) {
-                dataController.deleteCategoryWithCascade(catAction)
-                categoryToAction = nil
-            }
-            Button("Cancel", role: .cancel) { categoryToAction = nil }
-        } message: { catAction in Text("Are you sure? This will also delete all subcategories of \"\(catAction.name)\". There are no transactions associated.") }
-        .sheet(isPresented: $showingReassignCategorySheet) {
-            if let catFrom = categoryToAction {
-                ReassignCategoryTransactionsView(categoryToReassignFrom: catFrom, selectedTargetCategoryID: $targetCategoryIDForReassignment) { success in
-                    showingReassignCategorySheet = false
-                    if success { print("Category reassigned/deleted.") } else { print("Category reassignment cancelled/failed.") }
-                    categoryToAction = nil
-                }.environmentObject(dataController)
-            }
-        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
+
+// MARK: - 專案卡片
+struct ProjectCard: View {
+    @EnvironmentObject var dataController: DataController
+    let project: Project
+    
+    // 計算專案統計
+    private var projectStats: (transactions: Int, amount: Int) {
+        let transactions = dataController.transactions.filter { $0.project?.id == project.id }
+        return (transactions: transactions.count, amount: transactions.reduce(0) { $0 + $1.amount })
+    }
+    
+    var body: some View {
+        NavigationLink(destination: ProjectDetailView(project: project).environmentObject(dataController)) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(.purple)
+                    Spacer()
+                    Text("\(projectStats.transactions)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+                
+                Text(project.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                
+                Text("$\(projectStats.amount)")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.purple)
+            }
+            .padding(12)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 類別交易視圖（如果還沒有的話）
+struct CategoryTransactionsView: View {
+    @EnvironmentObject var dataController: DataController
+    let category: Category
+    
+    private var categoryTransactions: [Transaction] {
+        dataController.transactions
+            .filter { $0.category.id == category.id }
+            .sorted { $0.date > $1.date }
+    }
+    
+    var body: some View {
+        List {
+            ForEach(categoryTransactions) { transaction in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(transaction.subcategory.name)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("$\(transaction.amount)")
+                            .fontWeight(.semibold)
+                    }
+                    
+                    HStack {
+                        Text(DateFormatter.shortDate.string(from: transaction.date))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if let note = transaction.note {
+                            Text("• \(note)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .navigationTitle(category.name)
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
 
 // MARK: - AddCategoryView, ReassignCategoryTransactionsView (largely same as before)
 struct AddCategoryView: View { /* ... (same as previous version) ... */
