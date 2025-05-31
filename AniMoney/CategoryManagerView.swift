@@ -338,10 +338,20 @@ struct SubcategoryListView: View {
             Section(header: HStack {
                 Text("All Transactions in \"\(category.name)\"")
                 Spacer()
-                if !categoryTransactions.isEmpty {
-                    Text("\(categoryStats.count) 筆，$\(categoryStats.total)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    if !categoryTransactions.isEmpty {
+                        Text("\(categoryStats.count) 筆，$\(categoryStats.total)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Button {
+                        showingDateFilter = true
+                    } label: {
+                        Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .foregroundColor(filterStartDate != nil ? .blue : .secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }) {
                 // 篩選狀態提示
@@ -395,14 +405,6 @@ struct SubcategoryListView: View {
         }
         .navigationTitle("Manage Subcategories")
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    showingDateFilter = true
-                } label: {
-                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
-                }
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showingAddSubcategorySheet = true } label: {
                     Label("Add Subcategory", systemImage: "plus")
@@ -561,7 +563,6 @@ struct CategoryTransactionRow: View {
         .padding(.vertical, 6)
     }
 }
-
 struct AddSubcategoryView: View { /* ... (same as previous version) ... */
     @EnvironmentObject var dataController: DataController
     @Environment(\.dismiss) var dismiss

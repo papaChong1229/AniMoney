@@ -105,16 +105,6 @@ struct SubcategoryTransactionsView: View {
         }
         .navigationTitle(subcategory.name)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingDateFilter = true
-                } label: {
-                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
-                }
-            }
-        }
         .sheet(item: $editingTransaction) { transaction in
             EditTransactionView(transaction: transaction)
                 .environmentObject(dataController)

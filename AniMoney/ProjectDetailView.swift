@@ -135,10 +135,20 @@ struct ProjectDetailView: View {
             Section(header: HStack {
                 Text("專案交易記錄")
                 Spacer()
-                if !projectTransactions.isEmpty {
-                    Text("\(projectStats.count) 筆，$\(projectStats.total)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    if !projectTransactions.isEmpty {
+                        Text("\(projectStats.count) 筆，$\(projectStats.total)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Button {
+                        showingDateFilter = true
+                    } label: {
+                        Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .foregroundColor(filterStartDate != nil ? .blue : .secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }) {
                 // 篩選狀態提示
@@ -204,16 +214,6 @@ struct ProjectDetailView: View {
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingDateFilter = true
-                } label: {
-                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
-                }
-            }
-        }
         .sheet(isPresented: $showingDateFilter) {
             DateFilterView(
                 startDate: $filterStartDate,
