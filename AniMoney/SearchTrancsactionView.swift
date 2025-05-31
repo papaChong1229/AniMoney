@@ -62,25 +62,33 @@ struct SearchTransactionsView: View {
                     }
                 }
                 .padding()
+                .background(Color(.systemGroupedBackground))
                 
                 // 內容區域
                 if showingSearchHints && searchText.isEmpty {
                     // 搜尋提示和建議
                     SearchHintsView()
+                        .background(Color(.systemGroupedBackground))
                 } else if searchText.isEmpty {
                     // 空搜尋狀態
+                    Spacer()
                     ContentUnavailableView(
                         "輸入關鍵字開始搜尋",
                         systemImage: "magnifyingglass",
                         description: Text("在上方輸入要搜尋的備註內容")
                     )
+                    .background(Color(.systemGroupedBackground))
+                    Spacer()
                 } else if searchResults.isEmpty {
                     // 無搜尋結果
+                    Spacer()
                     ContentUnavailableView(
                         "找不到相關交易",
                         systemImage: "magnifyingglass.circle",
                         description: Text("沒有找到備註包含「\(searchText)」的交易記錄")
                     )
+                    .background(Color(.systemGroupedBackground))
+                    Spacer()
                 } else {
                     // 搜尋結果列表
                     List {
@@ -145,48 +153,60 @@ struct SearchTransactionsView: View {
 // MARK: - 搜尋提示頁面
 struct SearchHintsView: View {
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // 搜尋提示
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundColor(.yellow)
-                        Text("搜尋提示")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        SearchTipRow(icon: "note.text", title: "搜尋備註內容", description: "輸入關鍵字來搜尋交易的備註")
-                        SearchTipRow(icon: "textformat.abc", title: "不區分大小寫", description: "搜尋時自動忽略大小寫差異")
-                        SearchTipRow(icon: "list.bullet.clipboard", title: "即時搜尋", description: "輸入時即時顯示搜尋結果")
-                    }
+        VStack(spacing: 30) {
+            Spacer()
+            
+            // 搜尋提示
+            VStack(alignment: .center, spacing: 16) {
+                HStack {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundColor(.yellow)
+                        .font(.title2)
+                    Text("搜尋提示")
+                        .font(.title2)
+                        .fontWeight(.semibold)
                 }
                 
-                // 搜尋範例
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "doc.text.magnifyingglass")
-                            .foregroundColor(.blue)
-                        Text("搜尋範例")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        SearchExampleRow(keyword: "午餐", description: "找到所有備註包含「午餐」的交易")
-                        SearchExampleRow(keyword: "朋友", description: "搜尋與朋友相關的支出記錄")
-                        SearchExampleRow(keyword: "出差", description: "查找出差相關的交易記錄")
-                        SearchExampleRow(keyword: "生日", description: "尋找生日禮物或慶祝的花費")
-                    }
+                    SearchTipRow(icon: "note.text", title: "搜尋備註內容", description: "輸入關鍵字來搜尋交易的備註")
+                    SearchTipRow(icon: "textformat.abc", title: "不區分大小寫", description: "搜尋時自動忽略大小寫差異")
+                    SearchTipRow(icon: "list.bullet.clipboard", title: "即時搜尋", description: "輸入時即時顯示搜尋結果")
                 }
-                
-                Spacer()
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+            
+            // 搜尋範例
+            VStack(alignment: .center, spacing: 16) {
+                HStack {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .foregroundColor(.blue)
+                        .font(.title2)
+                    Text("搜尋範例")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    SearchExampleRow(keyword: "午餐", description: "找到所有備註包含「午餐」的交易")
+                    SearchExampleRow(keyword: "朋友", description: "搜尋與朋友相關的支出記錄")
+                    SearchExampleRow(keyword: "出差", description: "查找出差相關的交易記錄")
+                    SearchExampleRow(keyword: "生日", description: "尋找生日禮物或慶祝的花費")
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+            
+            Spacer()
         }
-        .background(Color(.systemGroupedBackground))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
     }
 }
 
