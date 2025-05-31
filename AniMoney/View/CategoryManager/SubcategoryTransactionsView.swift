@@ -95,7 +95,14 @@ struct SubcategoryTransactionsView: View {
                         Button {
                             editingTransaction = transaction
                         } label: {
-                            SubcategoryTransactionRow(transaction: transaction)
+                            HStack {
+                                SubcategoryTransactionRow(transaction: transaction)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 4)
+                            .background(Color.clear)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(PlainButtonStyle())
                     }

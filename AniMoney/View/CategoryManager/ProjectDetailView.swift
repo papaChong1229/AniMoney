@@ -192,7 +192,14 @@ struct ProjectDetailView: View {
                         Button {
                             editingTransaction = transaction
                         } label: {
-                            ProjectTransactionRow(transaction: transaction)
+                            HStack {
+                                ProjectTransactionRow(transaction: transaction)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 4)
+                            .background(Color.clear)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(PlainButtonStyle())
                     }

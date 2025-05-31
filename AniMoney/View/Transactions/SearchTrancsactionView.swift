@@ -125,7 +125,14 @@ struct SearchTransactionsView: View {
                                 Button {
                                     editingTransaction = transaction
                                 } label: {
-                                    SearchResultRow(transaction: transaction, searchText: searchText)
+                                    HStack {
+                                        SearchResultRow(transaction: transaction, searchText: searchText)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 4)
+                                    .background(Color.clear)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
