@@ -194,6 +194,67 @@ struct SubcategoryListView: View {
 
     var body: some View {
         List {
+            // 類別統計資訊卡片
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("類別名稱")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(category.name)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    
+                    HStack {
+                        Text("子類別數量")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(category.subcategories.count) 個")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    
+                    HStack {
+                        Text("交易筆數")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(categoryStats.count) 筆")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    
+                    if categoryStats.count > 0 {
+                        HStack {
+                            Text("總金額")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("$\(categoryStats.total)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        // 平均每筆交易金額
+                        HStack {
+                            Text("平均每筆")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("$\(categoryStats.count > 0 ? categoryStats.total / categoryStats.count : 0)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            
             // 子類別列表區塊
             Section(header: Text("Subcategories of \"\(category.name)\"")) {
                 if category.subcategories.isEmpty {
