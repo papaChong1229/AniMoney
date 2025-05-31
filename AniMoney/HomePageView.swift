@@ -65,143 +65,205 @@ struct HomePageView: View {
     }
     
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 20) {
-                // 歡迎標題區域
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("歡迎回來！")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            
-                            Text("今天是 \(DateFormatter.longDate.string(from: Date()))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        // 今日快速統計
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("今日")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("\(todayStats.count) 筆")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Text("$\(todayStats.total)")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        VStack(spacing: 0) {
+            // 自定義導航欄
+            HStack {
+                Text("記帳")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
                 
-                // 月度統計卡片
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("本月概覽")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Text(DateFormatter.monthYear.string(from: Date()))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack(spacing: 20) {
-                        // 交易筆數
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("交易筆數")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("\(monthStats.count)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                        }
-                        
-                        Spacer()
-                        
-                        // 總支出
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("總支出")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("$\(monthStats.total)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.red)
-                        }
-                    }
-                    
-                    // 平均每日支出
-                    if monthStats.count > 0 {
-                        let currentDay = Calendar.current.component(.day, from: Date())
-                        let averageDaily = monthStats.total / currentDay
-                        
+                Spacer()
+                
+                Button {
+                    showingSearchView = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            .background(Color(.systemGroupedBackground))
+            
+            // 主要內容
+            ScrollView {
+                LazyVStack(spacing: 20) {
+                    // 歡迎標題區域
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("平均每日")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("歡迎回來！")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                
+                                Text("今天是 \(DateFormatter.longDate.string(from: Date()))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
                             Spacer()
-                            Text("$\(averageDaily)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.orange)
+                            
+                            // 今日快速統計
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("今日")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("\(todayStats.count) 筆")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text("$\(todayStats.total)")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.blue)
+                            }
                         }
                     }
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-                
-                // 類別支出排行
-                if !categorySpending.isEmpty {
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    
+                    // 月度統計卡片
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("本月支出排行")
-                            .font(.headline)
-                            .fontWeight(.semibold)
+                        HStack {
+                            Text("本月概覽")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Text(DateFormatter.monthYear.string(from: Date()))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         
-                        ForEach(Array(categorySpending.enumerated()), id: \.offset) { index, item in
-                            HStack {
-                                // 排名
-                                Text("\(index + 1)")
+                        HStack(spacing: 20) {
+                            // 交易筆數
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("交易筆數")
                                     .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("\(monthStats.count)")
+                                    .font(.title2)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .frame(width: 20, height: 20)
-                                    .background(rankingColor(for: index))
-                                    .clipShape(Circle())
-                                
-                                // 類別名稱
-                                Text(item.category.name)
+                                    .foregroundColor(.green)
+                            }
+                            
+                            Spacer()
+                            
+                            // 總支出
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("總支出")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("$\(monthStats.total)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        
+                        // 平均每日支出
+                        if monthStats.count > 0 {
+                            let currentDay = Calendar.current.component(.day, from: Date())
+                            let averageDaily = monthStats.total / currentDay
+                            
+                            HStack {
+                                Text("平均每日")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("$\(averageDaily)")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                
-                                Spacer()
-                                
-                                // 金額和比例
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text("$\(item.amount)")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    
+                    // 類別支出排行
+                    if !categorySpending.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("本月支出排行")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                            
+                            ForEach(Array(categorySpending.enumerated()), id: \.offset) { index, item in
+                                HStack {
+                                    // 排名
+                                    Text("\(index + 1)")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .frame(width: 20, height: 20)
+                                        .background(rankingColor(for: index))
+                                        .clipShape(Circle())
                                     
-                                    if monthStats.total > 0 {
-                                        let percentage = (Double(item.amount) / Double(monthStats.total)) * 100
-                                        Text("\(String(format: "%.1f", percentage))%")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
+                                    // 類別名稱
+                                    Text(item.category.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    
+                                    Spacer()
+                                    
+                                    // 金額和比例
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("$\(item.amount)")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                        
+                                        if monthStats.total > 0 {
+                                            let percentage = (Double(item.amount) / Double(monthStats.total)) * 100
+                                            Text("\(String(format: "%.1f", percentage))%")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                 }
+                                .padding(.vertical, 4)
                             }
-                            .padding(.vertical, 4)
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    }
+                    
+                    // 最近交易
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("最近交易")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Text("最新 \(recentTransactions.count) 筆")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        if recentTransactions.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "list.bullet.clipboard")
+                                    .font(.title2)
+                                    .foregroundColor(.secondary)
+                                Text("還沒有任何交易記錄")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                        } else {
+                            ForEach(recentTransactions) { transaction in
+                                HomeTransactionRow(transaction: transaction)
+                                
+                                if transaction.id != recentTransactions.last?.id {
+                                    Divider()
+                                }
+                            }
                         }
                     }
                     .padding()
@@ -209,60 +271,10 @@ struct HomePageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
                 }
-                
-                // 最近交易
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("最近交易")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Text("最新 \(recentTransactions.count) 筆")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    if recentTransactions.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "list.bullet.clipboard")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
-                            Text("還沒有任何交易記錄")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                    } else {
-                        ForEach(recentTransactions) { transaction in
-                            HomeTransactionRow(transaction: transaction)
-                            
-                            if transaction.id != recentTransactions.last?.id {
-                                Divider()
-                            }
-                        }
-                    }
-                }
                 .padding()
-                .background(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
             }
-            .padding()
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("記帳")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingSearchView = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.primary)
-                }
-            }
-        }
         .sheet(isPresented: $showingSearchView) {
             SearchTransactionsView()
                 .environmentObject(dataController)
@@ -348,7 +360,7 @@ struct HomeTransactionRow: View {
     }
 }
 
-// MARK: - DateFormatter 擴展（在 struct 外部）
+// MARK: - DateFormatter 擴展
 extension DateFormatter {
     static let longDate: DateFormatter = {
         let formatter = DateFormatter()
