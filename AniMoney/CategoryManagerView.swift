@@ -256,7 +256,7 @@ struct SubcategoryListView: View {
             }
             
             // 子類別列表區塊
-            Section(header: Text("Subcategories of \"\(category.name)\"")) {
+            Section(header: Text("子類別管理")) {
                 if category.subcategories.isEmpty {
                     Text("No subcategories yet.").foregroundColor(.secondary)
                 }
@@ -336,7 +336,10 @@ struct SubcategoryListView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(categoryTransactions) { transaction in
-                        CategoryTransactionRow(transaction: transaction)
+                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                            CategoryTransactionRow(transaction: transaction)
+                        }
+                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
                     }
                     .onDelete(perform: deleteCategoryTransactions)
                 }

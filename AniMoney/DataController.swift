@@ -404,4 +404,48 @@ final class DataController: ObservableObject {
             return false
         }
     }
+    
+    // 在 DataController 的 Transaction CRUD 區塊中添加這個方法
+
+    func updateTransaction(
+        _ transaction: Transaction,
+        category: Category,
+        subcategory: Subcategory,
+        amount: Int,
+        date: Date,
+        note: String? = nil,
+        photoData: Data? = nil,
+        project: Project? = nil
+    ) {
+        // 確保使用管理的實例
+        guard let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category else {
+            print("❌ UpdateTransaction Error: Category not managed."); return
+        }
+        
+        guard let managedSubcategory = managedCategory.subcategories.first(where: { $0.id == subcategory.id }) else {
+            print("❌ UpdateTransaction Error: Subcategory '\(subcategory.name)' does not belong to category '\(managedCategory.name)' or is not managed correctly.")
+            return
+        }
+        
+        var managedProject: Project? = nil
+        if let proj = project {
+            managedProject = projects.first(where: { $0.id == proj.id }) ?? container.mainContext.model(for: proj.persistentModelID) as? Project
+            if managedProject == nil {
+                print("⚠️ UpdateTransaction Warning: Project not found in managed context, transaction will have nil project.");
+            }
+        }
+        
+        // 更新交易資訊
+        transaction.category = managedCategory
+        transaction.subcategory = managedSubcategory
+        transaction.amount = amount
+        transaction.date = date
+        transaction.note = note
+        transaction.photoData = photoData
+        transaction.project = managedProject
+        
+        if saveContext() {
+            fetchAll()
+        }
+    }
 }

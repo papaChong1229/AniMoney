@@ -75,7 +75,10 @@ struct SubcategoryTransactionsView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(transactions) { transaction in
-                        SubcategoryTransactionRow(transaction: transaction)
+                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                            SubcategoryTransactionRow(transaction: transaction)
+                        }
+                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
                     }
                     .onDelete(perform: deleteTransactions)
                 }

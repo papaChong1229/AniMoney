@@ -140,7 +140,10 @@ struct ProjectDetailView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(projectTransactions) { transaction in
-                        ProjectTransactionRow(transaction: transaction)
+                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                            ProjectTransactionRow(transaction: transaction)
+                        }
+                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
                     }
                     .onDelete(perform: deleteProjectTransactions)
                 }
