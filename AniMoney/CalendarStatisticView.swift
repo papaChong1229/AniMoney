@@ -146,15 +146,21 @@ struct CalendarStatisticView: View {
                 List {
                     Section(header: Text(listHeaderTitle)) {
                         ForEach(spendingByCategoryForDisplay, id: \.category.id) { spending in
-                            HStack {
-                                Text(spending.category.name)
-                                    .font(.headline)
-                                Spacer()
-                                Text("$\(spending.totalAmount)")
-                                    .font(.title3)
-                                    .fontWeight(.semibold)
+                            NavigationLink(destination: CategorySpecificTransactionsView(
+                                category: spending.category,
+                                initialStartDate: filterStartDate ?? Calendar.current.startOfDay(for: selectedDateFromCalendar), // 傳遞當前有效的篩選日期
+                                initialEndDate: filterEndDate ?? Calendar.current.endOfDay(for: selectedDateFromCalendar)     // 如果範圍為nil，則傳遞月曆選定日期
+                            ).environmentObject(dataController)) {
+                                HStack {
+                                    Text(spending.category.name)
+                                        .font(.headline)
+                                    Spacer()
+                                    Text("$\(spending.totalAmount)")
+                                        .font(.title3)
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.vertical, 4)
                             }
-                            .padding(.vertical, 4)
                         }
                         
                         // 顯示總計 (基於 transactionsForDisplay)

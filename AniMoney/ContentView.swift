@@ -33,12 +33,15 @@ struct ContentView: View {
                 }
                 .disabled(true)  // 本身不切換到這個 page
 
-            CalendarStatisticView()
-                .tag(3)
-                .tabItem {
-                    Image(systemName: "chart.bar.fill")
-                    Text("Calender Statistics")
-                }
+            NavigationStack {
+                CalendarStatisticView()
+            }
+            .tag(3)
+            .tabItem {
+                Image(systemName: "chart.bar.fill")
+                Text("Calender Statistics")
+            }
+            
 
             SettingView()
                 .tag(4)
