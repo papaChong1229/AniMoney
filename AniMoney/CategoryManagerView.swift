@@ -180,15 +180,30 @@ struct SubcategoryListView: View {
     @State private var showingAddSubcategorySheet = false
     
     @State private var editingTransaction: Transaction?
+    @State private var showingDateFilter = false
+    @State private var filterStartDate: Date?
+    @State private var filterEndDate: Date?
 
     // 計算該類別的所有交易，按日期排序
-    private var categoryTransactions: [Transaction] {
+    private var allCategoryTransactions: [Transaction] {
         dataController.transactions
             .filter { $0.category.id == category.id }
             .sorted { $0.date > $1.date } // 最新的在前面
     }
     
-    // 計算該類別的統計資訊
+    // 根據篩選條件顯示的交易
+    private var categoryTransactions: [Transaction] {
+        allCategoryTransactions.filtered(from: filterStartDate, to: filterEndDate)
+    }
+    
+    // 篩選狀態描述
+    private var filterStatusText: String? {
+        guard let start = filterStartDate, let end = filterEndDate else { return nil }
+        let formatter = DateFormatter.displayFormat
+        return "篩選: \(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+    
+    // 計算該類別的統計資訊（使用篩選後的數據）
     private var categoryStats: (count: Int, total: Int) {
         let transactions = categoryTransactions
         return (count: transactions.count, total: transactions.reduce(0) { $0 + $1.amount })
@@ -329,13 +344,42 @@ struct SubcategoryListView: View {
                         .foregroundColor(.secondary)
                 }
             }) {
+                // 篩選狀態提示
+                if let filterText = filterStatusText {
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.blue)
+                        Text(filterText)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Spacer()
+                        Button("清除篩選") {
+                            filterStartDate = nil
+                            filterEndDate = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(Color.blue.opacity(0.05))
+                }
+                
                 if categoryTransactions.isEmpty {
-                    ContentUnavailableView(
-                        "尚無交易記錄",
-                        systemImage: "list.bullet.clipboard",
-                        description: Text("這個類別還沒有任何交易記錄")
-                    )
-                    .listRowBackground(Color.clear)
+                    if allCategoryTransactions.isEmpty {
+                        ContentUnavailableView(
+                            "尚無交易記錄",
+                            systemImage: "list.bullet.clipboard",
+                            description: Text("這個類別還沒有任何交易記錄")
+                        )
+                        .listRowBackground(Color.clear)
+                    } else {
+                        ContentUnavailableView(
+                            "沒有符合條件的交易",
+                            systemImage: "calendar.badge.exclamationmark",
+                            description: Text("請調整篩選條件或清除篩選")
+                        )
+                        .listRowBackground(Color.clear)
+                    }
                 } else {
                     ForEach(categoryTransactions) { transaction in
                         Button {
@@ -351,6 +395,14 @@ struct SubcategoryListView: View {
         }
         .navigationTitle("Manage Subcategories")
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    showingDateFilter = true
+                } label: {
+                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showingAddSubcategorySheet = true } label: {
                     Label("Add Subcategory", systemImage: "plus")
@@ -359,6 +411,12 @@ struct SubcategoryListView: View {
         }
         .sheet(isPresented: $showingAddSubcategorySheet) {
             AddSubcategoryView(category: category).environmentObject(dataController)
+        }
+        .sheet(isPresented: $showingDateFilter) {
+            DateFilterView(
+                startDate: $filterStartDate,
+                endDate: $filterEndDate
+            )
         }
         .confirmationDialog("Delete Subcategory: \"\(subcategoryToAction?.name ?? "")\"?", isPresented: $showingSubConfirmDirectDeleteDialog, presenting: subcategoryToAction) { subcatAction in
             Button("Delete Subcategory", role: .destructive) {
@@ -503,6 +561,7 @@ struct CategoryTransactionRow: View {
         .padding(.vertical, 6)
     }
 }
+
 struct AddSubcategoryView: View { /* ... (same as previous version) ... */
     @EnvironmentObject var dataController: DataController
     @Environment(\.dismiss) var dismiss

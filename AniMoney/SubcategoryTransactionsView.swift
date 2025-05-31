@@ -8,12 +8,27 @@ struct SubcategoryTransactionsView: View {
     let parentCategory: Category
     
     @State private var editingTransaction: Transaction?
+    @State private var showingDateFilter = false
+    @State private var filterStartDate: Date?
+    @State private var filterEndDate: Date?
     
     // 計算這個子類別的所有交易，按日期排序
-    private var transactions: [Transaction] {
+    private var allTransactions: [Transaction] {
         dataController.transactions
             .filter { $0.subcategory.id == subcategory.id }
             .sorted { $0.date > $1.date } // 最新的在前面
+    }
+    
+    // 根據篩選條件顯示的交易
+    private var transactions: [Transaction] {
+        allTransactions.filtered(from: filterStartDate, to: filterEndDate)
+    }
+    
+    // 篩選狀態描述
+    private var filterStatusText: String? {
+        guard let start = filterStartDate, let end = filterEndDate else { return nil }
+        let formatter = DateFormatter.displayFormat
+        return "篩選: \(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
     
     var body: some View {
@@ -90,9 +105,25 @@ struct SubcategoryTransactionsView: View {
         }
         .navigationTitle(subcategory.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingDateFilter = true
+                } label: {
+                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
+                }
+            }
+        }
         .sheet(item: $editingTransaction) { transaction in
             EditTransactionView(transaction: transaction)
                 .environmentObject(dataController)
+        }
+        .sheet(isPresented: $showingDateFilter) {
+            DateFilterView(
+                startDate: $filterStartDate,
+                endDate: $filterEndDate
+            )
         }
     }
     

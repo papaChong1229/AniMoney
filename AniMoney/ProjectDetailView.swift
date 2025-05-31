@@ -12,21 +12,36 @@ struct ProjectDetailView: View {
     @State private var targetProjectIDForReassignment: PersistentIdentifier? // Can be nil for "No Project"
     
     @State private var editingTransaction: Transaction?
+    @State private var showingDateFilter = false
+    @State private var filterStartDate: Date?
+    @State private var filterEndDate: Date?
 
     // 計算該專案的所有交易，按日期排序
-    private var projectTransactions: [Transaction] {
+    private var allProjectTransactions: [Transaction] {
         dataController.transactions
             .filter { $0.project?.id == project.id }
             .sorted { $0.date > $1.date } // 最新的在前面
     }
     
-    // 計算該專案的統計資訊
+    // 根據篩選條件顯示的交易
+    private var projectTransactions: [Transaction] {
+        allProjectTransactions.filtered(from: filterStartDate, to: filterEndDate)
+    }
+    
+    // 篩選狀態描述
+    private var filterStatusText: String? {
+        guard let start = filterStartDate, let end = filterEndDate else { return nil }
+        let formatter = DateFormatter.displayFormat
+        return "篩選: \(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+    
+    // 計算該專案的統計資訊（使用篩選後的數據）
     private var projectStats: (count: Int, total: Int) {
         let transactions = projectTransactions
         return (count: transactions.count, total: transactions.reduce(0) { $0 + $1.amount })
     }
     
-    // 計算涉及的類別數量
+    // 計算涉及的類別數量（使用篩選後的數據）
     private var involvedCategoriesCount: Int {
         Set(projectTransactions.map { $0.category.id }).count
     }
@@ -90,7 +105,7 @@ struct ProjectDetailView: View {
                                 .foregroundColor(.blue)
                         }
                         
-                        // 專案期間（從第一筆到最後一筆交易）
+                        // 專案期間（從第一筆到最後一筆交易）- 使用篩選後的數據
                         if let firstDate = projectTransactions.last?.date,
                            let lastDate = projectTransactions.first?.date {
                             HStack {
@@ -126,13 +141,42 @@ struct ProjectDetailView: View {
                         .foregroundColor(.secondary)
                 }
             }) {
+                // 篩選狀態提示
+                if let filterText = filterStatusText {
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.blue)
+                        Text(filterText)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Spacer()
+                        Button("清除篩選") {
+                            filterStartDate = nil
+                            filterEndDate = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(Color.blue.opacity(0.05))
+                }
+                
                 if projectTransactions.isEmpty {
-                    ContentUnavailableView(
-                        "尚無交易記錄",
-                        systemImage: "folder.badge.questionmark",
-                        description: Text("這個專案還沒有任何交易記錄")
-                    )
-                    .listRowBackground(Color.clear)
+                    if allProjectTransactions.isEmpty {
+                        ContentUnavailableView(
+                            "尚無交易記錄",
+                            systemImage: "folder.badge.questionmark",
+                            description: Text("這個專案還沒有任何交易記錄")
+                        )
+                        .listRowBackground(Color.clear)
+                    } else {
+                        ContentUnavailableView(
+                            "沒有符合條件的交易",
+                            systemImage: "calendar.badge.exclamationmark",
+                            description: Text("請調整篩選條件或清除篩選")
+                        )
+                        .listRowBackground(Color.clear)
+                    }
                 } else {
                     ForEach(projectTransactions) { transaction in
                         Button {
@@ -160,6 +204,26 @@ struct ProjectDetailView: View {
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingDateFilter = true
+                } label: {
+                    Image(systemName: filterStartDate != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .foregroundColor(filterStartDate != nil ? .blue : .primary)
+                }
+            }
+        }
+        .sheet(isPresented: $showingDateFilter) {
+            DateFilterView(
+                startDate: $filterStartDate,
+                endDate: $filterEndDate
+            )
+        }
+        .sheet(item: $editingTransaction) { transaction in
+            EditTransactionView(transaction: transaction)
+                .environmentObject(dataController)
+        }
         .confirmationDialog("Delete Project: \"\(project.name)\"?", isPresented: $showingConfirmDirectDeleteProjectDialog) {
             Button("Delete Project", role: .destructive) {
                 dataController.deleteProject(project)
