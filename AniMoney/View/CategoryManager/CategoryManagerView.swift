@@ -121,7 +121,7 @@ struct CategoryManagerView: View {
                             }
                             .listStyle(PlainListStyle())
                             .scrollDisabled(true)
-                            .frame(minHeight: CGFloat(dataController.categories.count * 70))
+                            .frame(minHeight: CGFloat(dataController.categories.count * 78))
                             .background(Color(.systemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
