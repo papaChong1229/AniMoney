@@ -169,8 +169,8 @@ struct ReassignCategoryTransactionsView: View { /* ... (same as previous version
     }
 }
 
-// MARK: - SubcategoryListView, AddSubcategoryView, ReassignSubcategoryTransactionsView (largely same as before, with direct reassign flow)
-struct SubcategoryListView: View { /* ... (adapt swipe action like CategoryManagerView) ... */
+// MARK: - SubcategoryListView (更新版本，加入導航到交易詳情)
+struct SubcategoryListView: View {
     @EnvironmentObject var dataController: DataController
     @Bindable var category: Category
     @State private var subcategoryToAction: Subcategory?
@@ -182,9 +182,52 @@ struct SubcategoryListView: View { /* ... (adapt swipe action like CategoryManag
     var body: some View {
         List {
             Section(header: Text("Subcategories of \"\(category.name)\"")) {
-                if category.subcategories.isEmpty { Text("No subcategories yet.").foregroundColor(.secondary) }
+                if category.subcategories.isEmpty {
+                    Text("No subcategories yet.").foregroundColor(.secondary)
+                }
                 ForEach(category.subcategories.sorted(by: { $0.order < $1.order }), id: \.id) { subcategory in
-                    HStack { Text(subcategory.name); Spacer(); Text("(\(dataController.hasTransactions(subcategory: subcategory) ? "Has Tx" : "No Tx"))").font(.caption2).foregroundColor(.gray) }
+                    // 使用 NavigationLink 讓子類別可以點擊
+                    NavigationLink(destination: SubcategoryTransactionsView(
+                        subcategory: subcategory,
+                        parentCategory: category
+                    ).environmentObject(dataController)) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(subcategory.name)
+                                    .font(.headline)
+                                
+                                // 顯示這個子類別的交易統計
+                                let transactionCount = dataController.transactions.filter { $0.subcategory.id == subcategory.id }.count
+                                let totalAmount = dataController.transactions
+                                    .filter { $0.subcategory.id == subcategory.id }
+                                    .reduce(0) { $0 + $1.amount }
+                                
+                                if transactionCount > 0 {
+                                    Text("\(transactionCount) 筆交易，總計 $\(totalAmount)")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                } else {
+                                    Text("尚無交易記錄")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            // 狀態指示器
+                            VStack {
+                                Text("(\(dataController.hasTransactions(subcategory: subcategory) ? "Has Tx" : "No Tx"))")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                                
+                                // 箭頭圖示表示可以點擊
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                     .swipeActions {
                         Button(role: .destructive) {
                             self.subcategoryToAction = subcategory
@@ -200,17 +243,35 @@ struct SubcategoryListView: View { /* ... (adapt swipe action like CategoryManag
             }
         }
         .navigationTitle("Manage Subcategories")
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button { showingAddSubcategorySheet = true } label: { Label("Add Subcategory", systemImage: "plus") } } }
-        .sheet(isPresented: $showingAddSubcategorySheet) { AddSubcategoryView(category: category).environmentObject(dataController) }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showingAddSubcategorySheet = true } label: {
+                    Label("Add Subcategory", systemImage: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddSubcategorySheet) {
+            AddSubcategoryView(category: category).environmentObject(dataController)
+        }
         .confirmationDialog("Delete Subcategory: \"\(subcategoryToAction?.name ?? "")\"?", isPresented: $showingSubConfirmDirectDeleteDialog, presenting: subcategoryToAction) { subcatAction in
-            Button("Delete Subcategory", role: .destructive) { dataController.deleteSubcategory(subcatAction, from: category); subcategoryToAction = nil }
+            Button("Delete Subcategory", role: .destructive) {
+                dataController.deleteSubcategory(subcatAction, from: category)
+                subcategoryToAction = nil
+            }
             Button("Cancel", role: .cancel) { subcategoryToAction = nil }
-        } message: { subcatAction in Text("Are you sure? \"\(subcatAction.name)\" has no transactions.") }
+        } message: { subcatAction in
+            Text("Are you sure? \"\(subcatAction.name)\" has no transactions.")
+        }
         .sheet(isPresented: $showingSubReassignSheet) {
             if let subFrom = subcategoryToAction {
-                ReassignSubcategoryTransactionsView(parentCategory: category, subcategoryToReassignFrom: subFrom, selectedTargetSubcategoryID: $targetSubcategoryIDForReassignment) { success in
+                ReassignSubcategoryTransactionsView(
+                    parentCategory: category,
+                    subcategoryToReassignFrom: subFrom,
+                    selectedTargetSubcategoryID: $targetSubcategoryIDForReassignment
+                ) { success in
                     showingSubReassignSheet = false
-                    if success { print("Subcategory reassigned/deleted.") } else { print("Subcategory reassignment failed.") }
+                    if success { print("Subcategory reassigned/deleted.") }
+                    else { print("Subcategory reassignment failed.") }
                     subcategoryToAction = nil
                 }.environmentObject(dataController)
             }
