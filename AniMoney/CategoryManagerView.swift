@@ -178,6 +178,9 @@ struct SubcategoryListView: View {
     @State private var showingSubReassignSheet = false
     @State private var targetSubcategoryIDForReassignment: PersistentIdentifier?
     @State private var showingAddSubcategorySheet = false
+    
+    @State private var selectedTransaction: Transaction?
+    @State private var showingEditSheet = false
 
     // 計算該類別的所有交易，按日期排序
     private var categoryTransactions: [Transaction] {
@@ -336,10 +339,13 @@ struct SubcategoryListView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(categoryTransactions) { transaction in
-                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                        Button {
+                            selectedTransaction = transaction
+                            showingEditSheet = true
+                        } label: {
                             CategoryTransactionRow(transaction: transaction)
                         }
-                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .onDelete(perform: deleteCategoryTransactions)
                 }
@@ -377,6 +383,12 @@ struct SubcategoryListView: View {
                     else { print("Subcategory reassignment failed.") }
                     subcategoryToAction = nil
                 }.environmentObject(dataController)
+            }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let transaction = selectedTransaction {
+                EditTransactionView(transaction: transaction)
+                    .environmentObject(dataController)
             }
         }
     }

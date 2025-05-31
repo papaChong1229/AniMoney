@@ -17,6 +17,9 @@ struct ProjectDetailView: View {
     @State private var showingConfirmDirectDeleteProjectDialog = false
     @State private var showingReassignProjectSheet = false
     @State private var targetProjectIDForReassignment: PersistentIdentifier? // Can be nil for "No Project"
+    
+    @State private var selectedTransaction: Transaction?
+    @State private var showingEditSheet = false
 
     // 計算該專案的所有交易，按日期排序
     private var projectTransactions: [Transaction] {
@@ -140,10 +143,13 @@ struct ProjectDetailView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(projectTransactions) { transaction in
-                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                        Button {
+                            selectedTransaction = transaction
+                            showingEditSheet = true
+                        } label: {
                             ProjectTransactionRow(transaction: transaction)
                         }
-                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .onDelete(perform: deleteProjectTransactions)
                 }
@@ -187,6 +193,12 @@ struct ProjectDetailView: View {
                          dismiss() // Dismiss detail view
                      }
              }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let transaction = selectedTransaction {
+                EditTransactionView(transaction: transaction)
+                    .environmentObject(dataController)
+            }
         }
     }
     

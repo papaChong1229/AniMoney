@@ -7,6 +7,9 @@ struct SubcategoryTransactionsView: View {
     let subcategory: Subcategory
     let parentCategory: Category
     
+    @State private var selectedTransaction: Transaction?
+    @State private var showingEditSheet = false
+    
     // 計算這個子類別的所有交易，按日期排序
     private var transactions: [Transaction] {
         dataController.transactions
@@ -75,10 +78,13 @@ struct SubcategoryTransactionsView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(transactions) { transaction in
-                        NavigationLink(destination: EditTransactionView(transaction: transaction).environmentObject(dataController)) {
+                        Button {
+                            selectedTransaction = transaction
+                            showingEditSheet = true
+                        } label: {
                             SubcategoryTransactionRow(transaction: transaction)
                         }
-                        .buttonStyle(PlainButtonStyle()) // 保持原有的外觀
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .onDelete(perform: deleteTransactions)
                 }
@@ -86,6 +92,12 @@ struct SubcategoryTransactionsView: View {
         }
         .navigationTitle(subcategory.name)
         .navigationBarTitleDisplayMode(.large)
+        .sheet(isPresented: $showingEditSheet) {
+            if let transaction = selectedTransaction {
+                EditTransactionView(transaction: transaction)
+                    .environmentObject(dataController)
+            }
+        }
     }
     
     private func deleteTransactions(offsets: IndexSet) {
