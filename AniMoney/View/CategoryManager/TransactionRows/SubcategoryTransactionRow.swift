@@ -102,5 +102,6 @@ struct SubcategoryTransactionRow: View {
             Spacer()
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 }
