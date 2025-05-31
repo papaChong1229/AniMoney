@@ -19,19 +19,23 @@ struct CategoryManagerView: View {
     @State private var showingAddCategorySheet = false
     @State private var showingAddProjectSheet = false
     
-    // Category 刪除相關狀態
-    @State private var categoryToAction: Category?
-    @State private var showingCategoryReassignSheet = false
+    @State private var categoryForReassignmentSheet: Category?
     @State private var targetCategoryIDForReassignment: PersistentIdentifier?
     
-    // 計算屬性：排序後的類別
+    // 新增一個狀態來控制警告提示
+    @State private var showingCannotDeleteAlert = false
+    @State private var alertMessage = ""
+    
     private var sortedCategories: [Category] {
         dataController.categories.sorted { $0.order < $1.order }
     }
     
+    private let estimatedRowHeight: CGFloat = 78
+    @State private var listRefreshID = UUID()
+    @State private var categoriesForListDisplay: [Category] = []
+    
     var body: some View {
         VStack(spacing: 0) {
-            // 自定義導航欄
             HStack {
                 Text("分類管理")
                     .font(.largeTitle)
@@ -51,13 +55,10 @@ struct CategoryManagerView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
             .background(Color(.systemGroupedBackground))
-            
-            // 主要內容
+
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    // 類別管理區域
                     VStack(alignment: .leading, spacing: 16) {
-                        // 類別區域標題
                         HStack {
                             HStack(spacing: 8) {
                                 Image(systemName: "square.grid.2x2.fill")
@@ -81,15 +82,13 @@ struct CategoryManagerView: View {
                         }
                         .padding(.horizontal)
                         
-                        // 類別說明
                         Text("類別是支出的主要分類方式。點擊進入管理子類別，左滑刪除類別。")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .padding(.horizontal)
                             .padding(.bottom, 4)
-                        
-                        // 類別列表
-                        if dataController.categories.isEmpty {
+
+                        if categoriesForListDisplay.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "square.grid.2x2.slash")
                                     .font(.title2)
@@ -107,7 +106,7 @@ struct CategoryManagerView: View {
                             .padding(.horizontal)
                         } else {
                             List {
-                                ForEach(sortedCategories) { category in
+                                ForEach(categoriesForListDisplay) { category in
                                     NavigationLink(destination: SubcategoryListView(category: category).environmentObject(dataController)) {
                                         HStack {
                                             CategoryListRow(category: category)
@@ -121,12 +120,20 @@ struct CategoryManagerView: View {
                                     .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
                                     .listRowBackground(Color(.systemBackground))
                                     .listRowSeparator(.hidden)
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) {
+                                            self.updateCategoriesForListDisplay()
+                                            prepareForCategoryDelete(category) // <--- 調用修改後的函數
+                                        } label: {
+                                            Label("刪除", systemImage: "trash.fill")
+                                        }
+                                    }
                                 }
-                                .onDelete(perform: deleteCategories)
                             }
+                            .id(listRefreshID)
                             .listStyle(PlainListStyle())
                             .scrollDisabled(true)
-                            .frame(minHeight: CGFloat(dataController.categories.count * 78))
+                            .frame(minHeight: calculateListHeightForDisplay())
                             .background(Color(.systemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
@@ -142,181 +149,140 @@ struct CategoryManagerView: View {
                     )
                     .padding(.horizontal)
                     
-                    // 分隔線區域
+                    // ... (分隔線和專案管理區域不變) ...
                     VStack(spacing: 12) {
                         HStack {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.3))
-                                .frame(height: 1)
-                            
-                            Image(systemName: "circle.fill")
-                                .foregroundColor(.secondary.opacity(0.5))
-                                .font(.caption2)
-                            
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.3))
-                                .frame(height: 1)
-                        }
-                        .padding(.horizontal, 40)
+                            Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                            Image(systemName: "circle.fill").foregroundColor(.secondary.opacity(0.5)).font(.caption2)
+                            Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                        }.padding(.horizontal, 40)
                     }
                     
-                    // 專案管理區域
                     VStack(alignment: .leading, spacing: 16) {
-                        // 專案區域標題
                         HStack {
                             HStack(spacing: 8) {
-                                Image(systemName: "folder.fill")
-                                    .foregroundColor(.purple)
-                                    .font(.title2)
-                                Text("專案管理")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.primary)
+                                Image(systemName: "folder.fill").foregroundColor(.purple).font(.title2)
+                                Text("專案管理").font(.title2).fontWeight(.bold).foregroundColor(.primary)
                             }
-                            
                             Spacer()
-                            
-                            Text("\(dataController.projects.count) 個專案")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.purple.opacity(0.1))
-                                .clipShape(Capsule())
-                        }
-                        .padding(.horizontal)
+                            Text("\(dataController.projects.count) 個專案").font(.caption).foregroundColor(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color.purple.opacity(0.1)).clipShape(Capsule())
+                        }.padding(.horizontal)
                         
-                        // 專案描述
-                        Text("專案讓你追蹤跨類別的相關支出，例如旅行、裝修或特殊活動的花費。")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                            .padding(.bottom, 4)
+                        Text("專案讓你追蹤跨類別的相關支出，例如旅行、裝修或特殊活動的花費。").font(.caption).foregroundColor(.secondary).padding(.horizontal).padding(.bottom, 4)
                         
-                        // 專案網格
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 12) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                             ForEach(dataController.projects.sorted { $0.name < $1.name }) { project in
-                                ProjectCard(project: project)
-                                    .environmentObject(dataController)
+                                ProjectCard(project: project).environmentObject(dataController)
                             }
-                            
-                            // 新增專案按鈕
-                            Button {
-                                showingAddProjectSheet = true
-                            } label: {
+                            Button { showingAddProjectSheet = true } label: {
                                 VStack(spacing: 8) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.title2)
-                                        .foregroundColor(.purple)
-                                    
-                                    Text("新增專案")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.purple)
-                                }
-                                .frame(maxWidth: .infinity, minHeight: 80)
-                                .background(Color.purple.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.purple.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .padding(.horizontal)
-                    }
-                    .padding(.vertical, 20)
-                    .background(Color(.systemBackground).opacity(0.7))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.purple.opacity(0.2), lineWidth: 1)
-                    )
-                    .padding(.horizontal)
+                                    Image(systemName: "plus.circle.fill").font(.title2).foregroundColor(.purple)
+                                    Text("新增專案").font(.caption).fontWeight(.medium).foregroundColor(.purple)
+                                }.frame(maxWidth: .infinity, minHeight: 80).background(Color.purple.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.purple.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
+                            }.buttonStyle(PlainButtonStyle())
+                        }.padding(.horizontal)
+                    }.padding(.vertical, 20).background(Color(.systemBackground).opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 16)).overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.purple.opacity(0.2), lineWidth: 1)).padding(.horizontal)
+
                 }
                 .padding(.top, 8)
             }
         }
+        .onAppear {
+            updateCategoriesForListDisplay()
+            print("CategoryManagerView onAppear. Initializing categoriesForListDisplay.")
+        }
         .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showingAddCategorySheet) {
-            NavigationView {
-                AddCategoryView()
-                    .environmentObject(dataController)
-            }
+        .sheet(isPresented: $showingAddCategorySheet, onDismiss: {
+            updateCategoriesForListDisplay()
+        }) {
+            NavigationView { AddCategoryView().environmentObject(dataController) }
         }
         .sheet(isPresented: $showingAddProjectSheet) {
+            NavigationView { AddProjectView().environmentObject(dataController) }
+        }
+        .sheet(item: $categoryForReassignmentSheet, onDismiss: {
+            targetCategoryIDForReassignment = nil
+            print("Reassignment sheet dismissed.")
+        }) { categoryToActUpon in
             NavigationView {
-                AddProjectView()
-                    .environmentObject(dataController)
+                ReassignCategoryTransactionsView(
+                    categoryToReassignFrom: categoryToActUpon,
+                    selectedTargetCategoryID: $targetCategoryIDForReassignment
+                ) { success in
+                    if success {
+                        print("Reassign/Delete successful in callback.")
+                        self.updateCategoriesForListDisplay()
+                    } else {
+                        print("Reassign/Delete cancelled or failed in callback.")
+                        // 如果失敗或取消，也可以考慮是否刷新，但通常數據未變則不需要
+                    }
+                }
+                .environmentObject(dataController)
             }
         }
-        .sheet(isPresented: $showingCategoryReassignSheet) {
-            if let category = categoryToAction {
-                NavigationView {
-                    ReassignCategoryTransactionsView(
-                        categoryToReassignFrom: category,
-                        selectedTargetCategoryID: $targetCategoryIDForReassignment
-                    ) { success in
-                        showingCategoryReassignSheet = false
-                        if success {
-                            print("Category operation completed.")
-                        } else {
-                            print("Category operation failed/cancelled.")
-                        }
-                        // 重置狀態
-                        categoryToAction = nil
-                        targetCategoryIDForReassignment = nil
-                    }
-                    .environmentObject(dataController)
-                }
-            } else {
-                Text("Category data is no longer available.")
-                    .onAppear {
-                        showingCategoryReassignSheet = false
-                        categoryToAction = nil
-                    }
-            }
+        .alert("無法刪除類別", isPresented: $showingCannotDeleteAlert) { // 新增 Alert
+            Button("確認", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
         }
         .onDisappear {
-            // 清理狀態
-            categoryToAction = nil
+            categoryForReassignmentSheet = nil
             targetCategoryIDForReassignment = nil
         }
     }
     
-    // MARK: - 刪除類別邏輯
-    private func deleteCategories(offsets: IndexSet) {
-        // 只處理第一個要刪除的項目（SwiftUI 的 onDelete 通常一次只刪除一個）
-        guard let firstOffset = offsets.first,
-              sortedCategories.indices.contains(firstOffset) else { return }
-        
-        let category = sortedCategories[firstOffset]
-        categoryToAction = category
-        
-        if dataController.hasTransactions(category: category) {
-            // 有交易，觸發重新分配流程
-            let availableTargets = dataController.categories.filter { $0.id != category.id && !$0.subcategories.isEmpty }
-            
-            if availableTargets.isEmpty {
-                // 沒有可用的目標類別，無法重新分配
-                print("❌ 無法刪除類別 '\(category.name)'：沒有其他具有子類別的類別可供重新分配交易")
-                // 可以顯示一個提示給用戶
-            } else {
-                targetCategoryIDForReassignment = availableTargets.first?.id
-                showingCategoryReassignSheet = true
-            }
-        } else {
-            // 沒有交易，直接刪除（不顯示確認訊息）
-            withAnimation {
-                dataController.deleteCategory(category)
-            }
-            print("✅ 已刪除空類別: \(category.name)")
-        }
+    private func updateCategoriesForListDisplay() {
+        // 這裡的 sortedCategories 應該基於最新的 dataController.categories
+        self.categoriesForListDisplay = dataController.categories.sorted { $0.order < $1.order }
+        // 同時，也更新 listRefreshID，確保 List 使用新的 displayCategories 重繪
+        self.listRefreshID = UUID()
+        print("Updated categoriesForListDisplay, count: \(self.categoriesForListDisplay.count), new listRefreshID: \(self.listRefreshID)")
     }
+    
+    private func calculateListHeight() -> CGFloat {
+        let minHeight: CGFloat = estimatedRowHeight
+        let calculatedHeight = CGFloat(sortedCategories.count) * estimatedRowHeight
+        return max(minHeight, calculatedHeight)
+    }
+    
+    private func calculateListHeightForDisplay() -> CGFloat {
+        let minHeight: CGFloat = estimatedRowHeight
+        let calculatedHeight = CGFloat(categoriesForListDisplay.count) * estimatedRowHeight
+        return max(minHeight, calculatedHeight)
+    }
+    
+    // 重命名，表示準備刪除，實際刪除在 sheet 回調後
+   private func prepareForCategoryDelete(_ categoryToDelete: Category) {
+       print("Preparing to delete category: \(categoryToDelete.name)")
+       let availableTargets = dataController.categories.filter {
+           $0.id != categoryToDelete.id && !$0.subcategories.isEmpty
+       }
+       
+       if availableTargets.isEmpty {
+           if dataController.categories.count == 1 && dataController.categories.first?.id == categoryToDelete.id {
+               if !dataController.hasTransactions(category: categoryToDelete) && categoryToDelete.subcategories.isEmpty {
+                   print("Attempting to delete last empty category directly: \(categoryToDelete.name)")
+                   dataController.deleteCategory(categoryToDelete) // DataController 應 fetchAll
+                   self.updateCategoriesForListDisplay() // 更新顯示並刷新 List
+
+                   self.categoryForReassignmentSheet = nil // 確保 sheet 狀態清除
+                   self.targetCategoryIDForReassignment = nil
+                   return
+               }
+           }
+           
+           self.alertMessage = "無法刪除類別「\(categoryToDelete.name)」..."
+           self.showingCannotDeleteAlert = true
+
+           // 重置可能已設定的狀態
+           self.targetCategoryIDForReassignment = nil
+           self.categoryForReassignmentSheet = nil
+           return
+       } else {
+           self.targetCategoryIDForReassignment = availableTargets.first?.id
+           self.categoryForReassignmentSheet = categoryToDelete // 觸發 sheet
+       }
+   }
 }
 
 // MARK: - 類別列表行
