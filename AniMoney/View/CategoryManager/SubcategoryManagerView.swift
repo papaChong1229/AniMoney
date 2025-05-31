@@ -57,6 +57,7 @@ struct SubcategoryEmptyState: View {
 struct SubcategoryManagementSection: View {
     @EnvironmentObject var dataController: DataController
     let category: Category
+    let onDeleteRequest: (Subcategory) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -96,9 +97,13 @@ struct SubcategoryManagementSection: View {
                 SubcategoryEmptyState()
             } else {
                 ForEach(category.subcategories.sorted { $0.order < $1.order }) { subcategory in
-                    SubcategoryCard(subcategory: subcategory, parentCategory: category)
-                        .environmentObject(dataController)
-                        .padding(.horizontal)
+                    SubcategoryCard(
+                        subcategory: subcategory,
+                        parentCategory: category,
+                        onDeleteRequest: onDeleteRequest
+                    )
+                    .environmentObject(dataController)
+                    .padding(.horizontal)
                 }
             }
         }
@@ -129,11 +134,13 @@ struct SectionDivider: View {
 
 // MARK: - 交易區域標題
 struct CategoryTransactionHeader: View {
+    @EnvironmentObject var dataController: DataController
     let category: Category
     let categoryTransactions: [Transaction]
     let categoryStats: (count: Int, total: Int)
     let filterStartDate: Date?
     let onFilterTap: () -> Void
+    let onDeleteAllTap: () -> Void
     
     var body: some View {
         HStack {
@@ -150,6 +157,18 @@ struct CategoryTransactionHeader: View {
             Spacer()
             
             HStack(spacing: 8) {
+                // 全部刪除按鈕
+                if !categoryTransactions.isEmpty {
+                    Button {
+                        onDeleteAllTap()
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                
                 if !categoryTransactions.isEmpty {
                     Text("\(categoryStats.count) 筆，$\(categoryStats.total)")
                         .font(.caption)
@@ -235,6 +254,7 @@ struct CategoryTransactionEmptyState: View {
 
 // MARK: - 交易列表組件
 struct CategoryTransactionList: View {
+    @EnvironmentObject var dataController: DataController
     let categoryTransactions: [Transaction]
     let allCategoryTransactions: [Transaction]
     let category: Category
@@ -248,12 +268,26 @@ struct CategoryTransactionList: View {
             )
         } else {
             ForEach(categoryTransactions) { transaction in
-                Button {
-                    onTransactionTap(transaction)
-                } label: {
-                    CategoryTransactionRow(transaction: transaction)
+                HStack {
+                    Button {
+                        onTransactionTap(transaction)
+                    } label: {
+                        CategoryTransactionRow(transaction: transaction)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // 刪除按鈕
+                    Button {
+                        withAnimation {
+                            dataController.deleteTransaction(transaction)
+                        }
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                    .padding(.trailing, 8)
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(.horizontal)
                 
                 if transaction.id != categoryTransactions.last?.id {
@@ -279,6 +313,8 @@ struct CategoryTransactionSection: View {
     let onFilterTap: () -> Void
     let onClearFilter: () -> Void
     
+    @State private var showingDeleteAllConfirmation = false
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 交易區域標題
@@ -287,8 +323,12 @@ struct CategoryTransactionSection: View {
                 categoryTransactions: categoryTransactions,
                 categoryStats: categoryStats,
                 filterStartDate: filterStartDate,
-                onFilterTap: onFilterTap
+                onFilterTap: onFilterTap,
+                onDeleteAllTap: {
+                    showingDeleteAllConfirmation = true
+                }
             )
+            .environmentObject(dataController)
             
             // 交易說明
             Text("這裡顯示 \"\(category.name)\" 類別下所有子類別的交易記錄。")
@@ -312,6 +352,7 @@ struct CategoryTransactionSection: View {
                 category: category,
                 onTransactionTap: onTransactionTap
             )
+            .environmentObject(dataController)
         }
         .padding(.vertical, 20)
         .background(Color(.systemBackground).opacity(0.7))
@@ -321,6 +362,18 @@ struct CategoryTransactionSection: View {
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal)
+        .confirmationDialog("刪除所有交易？", isPresented: $showingDeleteAllConfirmation) {
+            Button("刪除所有 \(categoryStats.count) 筆交易", role: .destructive) {
+                withAnimation {
+                    categoryTransactions.forEach { transaction in
+                        dataController.deleteTransaction(transaction)
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("確定要刪除 \"\(category.name)\" 類別下的所有 \(categoryStats.count) 筆交易？此操作無法復原。")
+        }
     }
 }
 
@@ -375,8 +428,16 @@ struct SubcategoryListView: View {
             ScrollView {
                 LazyVStack(spacing: 20) {
                     // 子類別管理區域
-                    SubcategoryManagementSection(category: category)
-                        .environmentObject(dataController)
+                    SubcategoryManagementSection(
+                        category: category,
+                        onDeleteRequest: { subcategory in
+                            subcategoryToAction = subcategory
+                            let availableTargets = category.subcategories.filter { $0.id != subcategory.id }
+                            targetSubcategoryIDForReassignment = availableTargets.first?.id
+                            showingSubReassignSheet = true
+                        }
+                    )
+                    .environmentObject(dataController)
                     
                     // 分隔線區域
                     SectionDivider()
@@ -456,6 +517,7 @@ struct SubcategoryCard: View {
     @EnvironmentObject var dataController: DataController
     let subcategory: Subcategory
     let parentCategory: Category
+    let onDeleteRequest: (Subcategory) -> Void
     @State private var showingDeleteConfirmation = false
     
     // 計算子類別統計
@@ -509,25 +571,20 @@ struct SubcategoryCard: View {
                 
                 Spacer()
                 
-                if subcategoryStats.transactions == 0 {
-                    Button("刪除") {
+                Button("刪除") {
+                    if subcategoryStats.transactions == 0 {
                         showingDeleteConfirmation = true
+                    } else {
+                        // 有交易時，觸發重新分配流程
+                        onDeleteRequest(subcategory)
                     }
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.1))
-                    .clipShape(Capsule())
-                } else {
-                    Text("有 \(subcategoryStats.transactions) 筆交易")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Capsule())
                 }
+                .font(.caption)
+                .foregroundColor(.red)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.1))
+                .clipShape(Capsule())
             }
         }
         .padding()
