@@ -165,13 +165,28 @@ struct HomePageView: View {
                         
                         // 平均每日支出
                         if monthStats.count > 0 {
-                            let currentDay = Calendar.current.component(.day, from: Date())
-                            let averageDaily = monthStats.total / currentDay
+                            let today = Date()
+                            let calendar = Calendar.current
+                            
+                            // 獲取本月的第一天
+                            let startOfMonth = calendar.dateInterval(of: .month, for: today)?.start ?? today
+                            
+                            // 計算從本月第一天到今天的實際天數
+                            let daysPassed = calendar.dateComponents([.day], from: startOfMonth, to: today).day ?? 1
+                            let actualDays = max(daysPassed + 1, 1) // +1 因為包含今天，最少為1天
+                            
+                            let averageDaily = monthStats.total / actualDays
                             
                             HStack {
-                                Text("平均每日")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("平均每日")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("已過 \(actualDays) 天")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .opacity(0.7)
+                                }
                                 Spacer()
                                 Text("$\(averageDaily)")
                                     .font(.subheadline)
