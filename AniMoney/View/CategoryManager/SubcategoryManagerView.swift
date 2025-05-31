@@ -545,16 +545,6 @@ struct SubcategoryCard: View {
     }
 }
 
-// MARK: - Extensions
-extension DateFormatter {
-    static let displayFormat: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy/MM/dd"
-        return formatter
-    }()
-}
-
-
 #Preview {
     NavigationView {
         SubcategoryListView(category: Category(name: "食品酒水", order: 0))

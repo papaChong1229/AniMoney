@@ -375,21 +375,6 @@ struct HomeTransactionRow: View {
     }
 }
 
-// MARK: - DateFormatter 擴展
-extension DateFormatter {
-    static let longDate: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        return formatter
-    }()
-    
-    static let monthYear: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年 MM月"
-        return formatter
-    }()
-}
-
 #Preview {
     HomePageView()
         .environmentObject(try! DataController())

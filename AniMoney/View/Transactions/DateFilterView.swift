@@ -188,38 +188,6 @@ struct QuickFilterButton: View {
     }
 }
 
-// MARK: - DateFormatter 擴展
-extension DateFormatter {
-    static let displayFormat: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy/MM/dd"
-        return formatter
-    }()
-}
-
-// MARK: - Calendar 擴展
-extension Calendar {
-    func endOfDay(for date: Date) -> Date? {
-        var components = DateComponents()
-        components.day = 1
-        components.second = -1
-        return self.date(byAdding: components, to: startOfDay(for: date))
-    }
-}
-
-// MARK: - Transaction 日期篩選擴展
-extension Array where Element == Transaction {
-    func filtered(from startDate: Date?, to endDate: Date?) -> [Transaction] {
-        guard let start = startDate, let end = endDate else {
-            return self
-        }
-        
-        return self.filter { transaction in
-            transaction.date >= start && transaction.date <= end
-        }
-    }
-}
-
 #Preview {
     DateFilterView(
         startDate: .constant(nil),
