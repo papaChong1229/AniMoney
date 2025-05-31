@@ -551,16 +551,14 @@ struct SubcategoryListView: View {
         }
         .sheet(isPresented: $showingDateFilter) {
             // 假設 DateFilterView 已定義
-            // DateFilterView(startDate: $filterStartDate, endDate: $filterEndDate)
-             Text("Date Filter Placeholder") // Placeholder
+            DateFilterView(startDate: $filterStartDate, endDate: $filterEndDate)
         }
         .sheet(item: $editingTransaction, onDismiss: {
             print("EditTransactionView dismissed.")
         }) { transaction in
             // 假設 EditTransactionView 已定義
-            // EditTransactionView(transaction: transaction)
-            //    .environmentObject(dataController)
-            Text("Edit Transaction Placeholder for \(transaction.id)") // Placeholder
+            EditTransactionView(transaction: transaction)
+                .environmentObject(dataController)
         }
         // MARK: 修改 Reassign Sheet 的呈現方式
         .sheet(item: $subcategoryForItemSheet, onDismiss: {
@@ -583,11 +581,6 @@ struct SubcategoryListView: View {
                     } else {
                         print("❌ 子類別重新分配失敗或取消。")
                     }
-                    // subcategoryForItemSheet 會在 ReassignSubcategoryTransactionsView 的父視圖
-                    // (此處是 SubcategoryListView) 的 onCompletion 回調執行完畢後，
-                    // 且 ReassignSubcategoryTransactionsView 的 dismiss() 被調用時（如果它自己調用），
-                    // 或此 sheet 的 item 綁定變為 nil 時自動關閉。
-                    // targetSubcategoryIDForReassignment 在 sheet 的 onDismiss 中清理。
                 }
                 .environmentObject(dataController)
             }
