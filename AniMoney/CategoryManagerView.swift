@@ -543,57 +543,6 @@ struct ReassignSubcategoryTransactionsView: View { /* ... (same as previous vers
     }
 }
 
-// MARK: - Project Views (Updated for direct reassign and "None" option)
-struct ProjectDetailView: View {
-    @EnvironmentObject var dataController: DataController
-    @Environment(\.dismiss) var dismiss
-    @Bindable var project: Project
-
-    @State private var showingConfirmDirectDeleteProjectDialog = false
-    @State private var showingReassignProjectSheet = false
-    @State private var targetProjectIDForReassignment: PersistentIdentifier? // Can be nil for "No Project"
-
-    var body: some View {
-        List {
-            Section("Project Details") {
-                Text("Name: \(project.name)")
-                Text("Has Transactions: \(dataController.hasTransactions(project: project) ? "Yes" : "No")")
-            }
-            Section("Actions") {
-                Button("Delete Project", role: .destructive) {
-                    if dataController.hasTransactions(project: project) {
-                        targetProjectIDForReassignment = dataController.projects.first(where: { $0.id != project.id })?.id // Pre-select or default to nil in sheet
-                        self.showingReassignProjectSheet = true
-                    } else {
-                        self.showingConfirmDirectDeleteProjectDialog = true
-                    }
-                }
-            }
-        }
-        .navigationTitle(project.name)
-        .confirmationDialog("Delete Project: \"\(project.name)\"?", isPresented: $showingConfirmDirectDeleteProjectDialog) {
-            Button("Delete Project", role: .destructive) { dataController.deleteProject(project); dismiss() }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Are you sure? \"\(project.name)\" has no transactions.") }
-        .sheet(isPresented: $showingReassignProjectSheet) {
-            // Ensure 'project' is still valid (e.g., not deleted by another process if app is complex)
-             if let currentProject = dataController.projects.first(where: {$0.id == project.id}) {
-                 ReassignProjectTransactionsView(projectToReassignFrom: currentProject, selectedTargetProjectID: $targetProjectIDForReassignment) { success in
-                    showingReassignProjectSheet = false
-                    if success { print("Project operation completed."); dismiss() } else { print("Project operation failed/cancelled.") }
-                 }.environmentObject(dataController)
-             } else {
-                 // Handle case where project might have been deleted in the meantime
-                 Text("Project data is no longer available.")
-                     .onAppear {
-                         showingReassignProjectSheet = false // Dismiss sheet if project is gone
-                         dismiss() // Dismiss detail view
-                     }
-             }
-        }
-    }
-}
-
 struct AddProjectView: View { /* ... (same as previous version) ... */
     @EnvironmentObject var dataController: DataController
     @Environment(\.dismiss) var dismiss
