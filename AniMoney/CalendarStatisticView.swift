@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct CalendarStatictisView: View {
+struct CalendarStatisticView: View {
     var body: some View {
         VStack {
             Image(systemName: "globe")
@@ -20,5 +20,5 @@ struct CalendarStatictisView: View {
 }
 
 #Preview {
-    CalendarStatictisView()
+    CalendarStatisticView()
 }
