@@ -140,7 +140,6 @@ struct CategoryTransactionHeader: View {
     let categoryStats: (count: Int, total: Int)
     let filterStartDate: Date?
     let onFilterTap: () -> Void
-    let onDeleteAllTap: () -> Void
     
     var body: some View {
         HStack {
@@ -157,18 +156,6 @@ struct CategoryTransactionHeader: View {
             Spacer()
             
             HStack(spacing: 8) {
-                // 全部刪除按鈕
-                if !categoryTransactions.isEmpty {
-                    Button {
-                        onDeleteAllTap()
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                
                 if !categoryTransactions.isEmpty {
                     Text("\(categoryStats.count) 筆，$\(categoryStats.total)")
                         .font(.caption)
@@ -260,6 +247,9 @@ struct CategoryTransactionList: View {
     let category: Category
     let onTransactionTap: (Transaction) -> Void
     
+    @State private var transactionToDelete: Transaction?
+    @State private var showingDeleteConfirmation = false
+    
     var body: some View {
         if categoryTransactions.isEmpty {
             CategoryTransactionEmptyState(
@@ -278,9 +268,8 @@ struct CategoryTransactionList: View {
                     
                     // 刪除按鈕
                     Button {
-                        withAnimation {
-                            dataController.deleteTransaction(transaction)
-                        }
+                        transactionToDelete = transaction
+                        showingDeleteConfirmation = true
                     } label: {
                         Image(systemName: "trash")
                             .foregroundColor(.red)
@@ -293,6 +282,22 @@ struct CategoryTransactionList: View {
                 if transaction.id != categoryTransactions.last?.id {
                     Divider()
                         .padding(.horizontal)
+                }
+            }
+            .confirmationDialog("刪除交易？", isPresented: $showingDeleteConfirmation) {
+                Button("刪除交易", role: .destructive) {
+                    if let transaction = transactionToDelete {
+                        withAnimation {
+                            dataController.deleteTransaction(transaction)
+                        }
+                    }
+                }
+                Button("取消", role: .cancel) {
+                    transactionToDelete = nil
+                }
+            } message: {
+                if let transaction = transactionToDelete {
+                    Text("確定要刪除這筆 $\(transaction.amount) 的交易？此操作無法復原。")
                 }
             }
         }
@@ -313,8 +318,6 @@ struct CategoryTransactionSection: View {
     let onFilterTap: () -> Void
     let onClearFilter: () -> Void
     
-    @State private var showingDeleteAllConfirmation = false
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 交易區域標題
@@ -323,10 +326,7 @@ struct CategoryTransactionSection: View {
                 categoryTransactions: categoryTransactions,
                 categoryStats: categoryStats,
                 filterStartDate: filterStartDate,
-                onFilterTap: onFilterTap,
-                onDeleteAllTap: {
-                    showingDeleteAllConfirmation = true
-                }
+                onFilterTap: onFilterTap
             )
             .environmentObject(dataController)
             
@@ -362,18 +362,6 @@ struct CategoryTransactionSection: View {
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal)
-        .confirmationDialog("刪除所有交易？", isPresented: $showingDeleteAllConfirmation) {
-            Button("刪除所有 \(categoryStats.count) 筆交易", role: .destructive) {
-                withAnimation {
-                    categoryTransactions.forEach { transaction in
-                        dataController.deleteTransaction(transaction)
-                    }
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("確定要刪除 \"\(category.name)\" 類別下的所有 \(categoryStats.count) 筆交易？此操作無法復原。")
-        }
     }
 }
 
@@ -534,10 +522,6 @@ struct SubcategoryCard: View {
                     Text(subcategory.name)
                         .font(.headline)
                         .fontWeight(.semibold)
-                    
-                    Text("順序: \(subcategory.order)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
