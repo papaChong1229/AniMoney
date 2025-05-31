@@ -210,12 +210,8 @@ struct ProjectDetailView: View {
             // 專案管理操作
             Section("專案管理") {
                 Button("刪除專案", role: .destructive) {
-                    if dataController.hasTransactions(project: project) {
-                        targetProjectIDForReassignment = dataController.projects.first(where: { $0.id != project.id })?.id // Pre-select or default to nil in sheet
-                        self.showingReassignProjectSheet = true
-                    } else {
-                        self.showingConfirmDirectDeleteProjectDialog = true
-                    }
+                    targetProjectIDForReassignment = dataController.projects.first(where: { $0.id != project.id })?.id // Pre-select or default to nil in sheet
+                    self.showingReassignProjectSheet = true
                 }
             }
         }
@@ -230,15 +226,6 @@ struct ProjectDetailView: View {
         .sheet(item: $editingTransaction) { transaction in
             EditTransactionView(transaction: transaction)
                 .environmentObject(dataController)
-        }
-        .confirmationDialog("Delete Project: \"\(project.name)\"?", isPresented: $showingConfirmDirectDeleteProjectDialog) {
-            Button("Delete Project", role: .destructive) {
-                dataController.deleteProject(project)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Are you sure? \"\(project.name)\" has no transactions.")
         }
         .sheet(isPresented: $showingReassignProjectSheet) {
             // Ensure 'project' is still valid (e.g., not deleted by another process if app is complex)
