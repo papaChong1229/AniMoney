@@ -33,7 +33,7 @@ struct ContentView: View {
                 }
                 .disabled(true)  // 本身不切換到這個 page
 
-            StatisticsView()
+            CalendarStatictisView()
                 .tag(3)
                 .tabItem {
                     Image(systemName: "chart.bar.fill")
