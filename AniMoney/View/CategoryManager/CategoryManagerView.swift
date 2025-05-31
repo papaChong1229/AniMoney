@@ -24,6 +24,11 @@ struct CategoryManagerView: View {
     @State private var showingCategoryReassignSheet = false
     @State private var targetCategoryIDForReassignment: PersistentIdentifier?
     
+    // 計算屬性：排序後的類別
+    private var sortedCategories: [Category] {
+        dataController.categories.sorted { $0.order < $1.order }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // 自定義導航欄
@@ -102,7 +107,7 @@ struct CategoryManagerView: View {
                             .padding(.horizontal)
                         } else {
                             List {
-                                ForEach(dataController.categories.sorted { $0.order < $1.order }) { category in
+                                ForEach(sortedCategories) { category in
                                     NavigationLink(destination: SubcategoryListView(category: category).environmentObject(dataController)) {
                                         HStack {
                                             CategoryListRow(category: category)
@@ -262,6 +267,9 @@ struct CategoryManagerView: View {
                         } else {
                             print("Category operation failed/cancelled.")
                         }
+                        // 重置狀態
+                        categoryToAction = nil
+                        targetCategoryIDForReassignment = nil
                     }
                     .environmentObject(dataController)
                 }
@@ -269,30 +277,44 @@ struct CategoryManagerView: View {
                 Text("Category data is no longer available.")
                     .onAppear {
                         showingCategoryReassignSheet = false
+                        categoryToAction = nil
                     }
             }
+        }
+        .onDisappear {
+            // 清理狀態
+            categoryToAction = nil
+            targetCategoryIDForReassignment = nil
         }
     }
     
     // MARK: - 刪除類別邏輯
     private func deleteCategories(offsets: IndexSet) {
-        let categoriesToDelete = offsets.map { dataController.categories.sorted { $0.order < $1.order }[$0] }
+        // 只處理第一個要刪除的項目（SwiftUI 的 onDelete 通常一次只刪除一個）
+        guard let firstOffset = offsets.first,
+              sortedCategories.indices.contains(firstOffset) else { return }
         
-        for category in categoriesToDelete {
-            categoryToAction = category
+        let category = sortedCategories[firstOffset]
+        categoryToAction = category
+        
+        if dataController.hasTransactions(category: category) {
+            // 有交易，觸發重新分配流程
+            let availableTargets = dataController.categories.filter { $0.id != category.id && !$0.subcategories.isEmpty }
             
-            if dataController.hasTransactions(category: category) {
-                // 有交易，觸發重新分配流程
-                let availableTargets = dataController.categories.filter { $0.id != category.id && !$0.subcategories.isEmpty }
+            if availableTargets.isEmpty {
+                // 沒有可用的目標類別，無法重新分配
+                print("❌ 無法刪除類別 '\(category.name)'：沒有其他具有子類別的類別可供重新分配交易")
+                // 可以顯示一個提示給用戶
+            } else {
                 targetCategoryIDForReassignment = availableTargets.first?.id
                 showingCategoryReassignSheet = true
-            } else {
-                // 沒有交易，直接刪除（不顯示確認訊息）
-                withAnimation {
-                    dataController.deleteCategory(category)
-                }
-                print("✅ 已刪除空類別: \(category.name)")
             }
+        } else {
+            // 沒有交易，直接刪除（不顯示確認訊息）
+            withAnimation {
+                dataController.deleteCategory(category)
+            }
+            print("✅ 已刪除空類別: \(category.name)")
         }
     }
 }

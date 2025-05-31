@@ -57,7 +57,7 @@ struct SubcategoryEmptyState: View {
 struct SubcategoryManagementSection: View {
     @EnvironmentObject var dataController: DataController
     let category: Category
-    let onDeleteRequest: (Subcategory) -> Void
+    let onDeleteRequest: ([Subcategory]) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -114,10 +114,9 @@ struct SubcategoryManagementSection: View {
                         .listRowSeparator(.hidden)
                     }
                     .onDelete(perform: { offsets in
-                        let subcategoriesToDelete = offsets.map { category.subcategories.sorted { $0.order < $1.order }[$0] }
-                        for subcategory in subcategoriesToDelete {
-                            onDeleteRequest(subcategory)
-                        }
+                        let sortedSubcategories = category.subcategories.sorted { $0.order < $1.order }
+                        let subcategoriesToDelete = offsets.map { sortedSubcategories[$0] }
+                        onDeleteRequest(subcategoriesToDelete)
                     })
                 }
                 .listStyle(PlainListStyle())
@@ -435,10 +434,13 @@ struct SubcategoryListView: View {
     @EnvironmentObject var dataController: DataController
     @Bindable var category: Category
     @State private var subcategoryToAction: Subcategory?
-    @State private var showingSubConfirmDirectDeleteDialog = false
     @State private var showingSubReassignSheet = false
     @State private var targetSubcategoryIDForReassignment: PersistentIdentifier?
     @State private var showingAddSubcategorySheet = false
+    
+    // 批量刪除狀態
+    @State private var pendingSubcategoryDeletions: [Subcategory] = []
+    @State private var currentSubcategoryDeletionIndex = 0
     
     @State private var editingTransaction: Transaction?
     @State private var showingDateFilter = false
@@ -483,11 +485,8 @@ struct SubcategoryListView: View {
                     // 子類別管理區域
                     SubcategoryManagementSection(
                         category: category,
-                        onDeleteRequest: { subcategory in
-                            subcategoryToAction = subcategory
-                            let availableTargets = category.subcategories.filter { $0.id != subcategory.id }
-                            targetSubcategoryIDForReassignment = availableTargets.first?.id
-                            showingSubReassignSheet = true
+                        onDeleteRequest: { subcategories in
+                            handleSubcategoryDeleteRequest(subcategories)
                         }
                     )
                     .environmentObject(dataController)
@@ -530,16 +529,6 @@ struct SubcategoryListView: View {
             EditTransactionView(transaction: transaction)
                 .environmentObject(dataController)
         }
-        .confirmationDialog("Delete Subcategory: \"\(subcategoryToAction?.name ?? "")\"?", isPresented: $showingSubConfirmDirectDeleteDialog) {
-            Button("Delete Subcategory", role: .destructive) {
-                if let subcategory = subcategoryToAction {
-                    dataController.deleteSubcategory(subcategory, from: category)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Are you sure? \"\(subcategoryToAction?.name ?? "")\" has no transactions.")
-        }
         .sheet(isPresented: $showingSubReassignSheet) {
             if let subcategory = subcategoryToAction {
                 ReassignSubcategoryTransactionsView(
@@ -549,105 +538,103 @@ struct SubcategoryListView: View {
                 ) { success in
                     showingSubReassignSheet = false
                     if success {
-                        print("Subcategory operation completed.")
+                        print("✅ 子類別重新分配完成")
+                        // 處理完當前項目後，繼續處理下一個
+                        currentSubcategoryDeletionIndex += 1
+                        processPendingSubcategoryDeletions()
                     } else {
-                        print("Subcategory operation failed/cancelled.")
+                        print("❌ 子類別重新分配失敗或取消")
+                        // 取消操作，清理所有狀態
+                        cancelSubcategoryDeletion()
                     }
                 }
                 .environmentObject(dataController)
             } else {
-                Text("Subcategory data is no longer available.")
+                Text("子類別資料不再可用")
                     .onAppear {
                         showingSubReassignSheet = false
+                        // 當前項目無效，繼續處理下一個
+                        currentSubcategoryDeletionIndex += 1
+                        processPendingSubcategoryDeletions()
                     }
             }
         }
     }
-}
-
-// MARK: - 子類別卡片
-struct SubcategoryCard: View {
-    @EnvironmentObject var dataController: DataController
-    let subcategory: Subcategory
-    let parentCategory: Category
-    let onDeleteRequest: (Subcategory) -> Void
-    @State private var showingDeleteConfirmation = false
     
-    // 計算子類別統計
-    private var subcategoryStats: (transactions: Int, amount: Int) {
-        let transactions = dataController.transactions.filter { $0.subcategory.id == subcategory.id }
-        return (transactions: transactions.count, amount: transactions.reduce(0) { $0 + $1.amount })
+    // MARK: - 修復後的處理子類別刪除請求
+    private func handleSubcategoryDeleteRequest(_ subcategories: [Subcategory]) {
+        // 清空之前的狀態，重新開始
+        subcategoryToAction = nil
+        targetSubcategoryIDForReassignment = nil
+        
+        // 將要刪除的子類別加入待處理隊列
+        pendingSubcategoryDeletions = subcategories
+        currentSubcategoryDeletionIndex = 0
+        
+        // 開始處理第一個項目
+        processPendingSubcategoryDeletions()
     }
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 子類別標題和統計
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(subcategory.name)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(subcategoryStats.transactions) 筆")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                    Text("$\(subcategoryStats.amount)")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
-                }
+    private func processPendingSubcategoryDeletions() {
+        // 檢查是否還有待處理的項目
+        guard currentSubcategoryDeletionIndex < pendingSubcategoryDeletions.count else {
+            // 所有項目都處理完了，清空隊列和狀態
+            cleanupSubcategoryDeletionState()
+            return
+        }
+        
+        let subcategoryToDelete = pendingSubcategoryDeletions[currentSubcategoryDeletionIndex]
+        
+        // 檢查子類別是否仍然存在於 category 中
+        guard category.subcategories.contains(where: { $0.id == subcategoryToDelete.id }) else {
+            // 子類別已經不存在，跳到下一個
+            print("ℹ️ 子類別 \(subcategoryToDelete.name) 已不存在，跳過")
+            currentSubcategoryDeletionIndex += 1
+            processPendingSubcategoryDeletions()
+            return
+        }
+        
+        subcategoryToAction = subcategoryToDelete
+        
+        if dataController.hasTransactions(subcategory: subcategoryToDelete) {
+            // 有交易，觸發重新分配流程
+            let availableTargets = category.subcategories.filter { $0.id != subcategoryToDelete.id }
+            
+            if availableTargets.isEmpty {
+                // 沒有可用的目標子類別，跳過這個刪除操作
+                print("⚠️ 無法刪除子類別 \(subcategoryToDelete.name)：沒有其他子類別可用於重新分配交易")
+                currentSubcategoryDeletionIndex += 1
+                processPendingSubcategoryDeletions()
+                return
             }
             
-            // 操作按鈕
-            HStack {
-                NavigationLink(destination: SubcategoryTransactionsView(subcategory: subcategory, parentCategory: parentCategory).environmentObject(dataController)) {
-                    HStack {
-                        Image(systemName: "list.bullet")
-                        Text("查看交易")
-                    }
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
-                    .clipShape(Capsule())
-                }
-                
-                Spacer()
-                
-                Button("刪除") {
-                    if subcategoryStats.transactions == 0 {
-                        showingDeleteConfirmation = true
-                    } else {
-                        // 有交易時，觸發重新分配流程
-                        onDeleteRequest(subcategory)
-                    }
-                }
-                .font(.caption)
-                .foregroundColor(.red)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.red.opacity(0.1))
-                .clipShape(Capsule())
+            targetSubcategoryIDForReassignment = availableTargets.first?.id
+            showingSubReassignSheet = true
+        } else {
+            // 沒有交易，直接刪除
+            withAnimation {
+                dataController.deleteSubcategory(subcategoryToDelete, from: category)
             }
+            print("✅ 已刪除空子類別: \(subcategoryToDelete.name)")
+            
+            // 處理下一個項目
+            currentSubcategoryDeletionIndex += 1
+            processPendingSubcategoryDeletions()
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-        .confirmationDialog("刪除子類別: \"\(subcategory.name)\"?", isPresented: $showingDeleteConfirmation) {
-            Button("刪除", role: .destructive) {
-                dataController.deleteSubcategory(subcategory, from: parentCategory)
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("確定要刪除 \"\(subcategory.name)\"？此操作無法復原。")
-        }
+    }
+    
+    // 清理子類別刪除相關的所有狀態
+    private func cleanupSubcategoryDeletionState() {
+        pendingSubcategoryDeletions.removeAll()
+        currentSubcategoryDeletionIndex = 0
+        subcategoryToAction = nil
+        targetSubcategoryIDForReassignment = nil
+    }
+    
+    // 取消子類別刪除操作
+    private func cancelSubcategoryDeletion() {
+        cleanupSubcategoryDeletionState()
+        showingSubReassignSheet = false
     }
 }
 
@@ -662,18 +649,22 @@ struct AddSubcategoryView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Adding to Category: \(category.name)")) {
-                    TextField("New Subcategory Name", text: $subcategoryName)
+                Section(header: Text("新增到類別: \(category.name)")) {
+                    TextField("子類別名稱", text: $subcategoryName)
                 }
-                Button("Add Subcategory") {
+                Button("新增子類別") {
                     if !subcategoryName.isEmpty {
                         dataController.addSubcategory(to: category, name: subcategoryName)
                         dismiss()
                     }
                 }.disabled(subcategoryName.isEmpty)
             }
-            .navigationTitle("New Subcategory")
-            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
+            .navigationTitle("新增子類別")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { dismiss() }
+                }
+            }
         }
     }
 }
@@ -695,12 +686,13 @@ struct ReassignSubcategoryTransactionsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Reassign transactions from \"\(subcategoryToReassignFrom.name)\" to another subcategory in \"\(parentCategory.name)\":")) {
+                Section(header: Text("重新分配 \"\(subcategoryToReassignFrom.name)\" 的所有交易到 \"\(parentCategory.name)\" 的其他子類別：")) {
                     if availableTargetSubcategories.isEmpty {
-                        Text("No other subcategories available in \"\(parentCategory.name)\".").foregroundColor(.orange)
+                        Text("在 \"\(parentCategory.name)\" 中沒有其他子類別可供選擇。")
+                            .foregroundColor(.orange)
                     } else {
-                        Picker("Target Subcategory", selection: $selectedTargetSubcategoryID) {
-                            Text("Select a subcategory...").tag(nil as PersistentIdentifier?)
+                        Picker("目標子類別", selection: $selectedTargetSubcategoryID) {
+                            Text("請選擇子類別...").tag(nil as PersistentIdentifier?)
                             ForEach(availableTargetSubcategories) { subcat in
                                 Text(subcat.name).tag(subcat.id as PersistentIdentifier?)
                             }
@@ -708,13 +700,20 @@ struct ReassignSubcategoryTransactionsView: View {
                     }
                 }
                 Section {
-                    Button("Reassign and Delete Original Subcategory") {
+                    Button("重新分配並刪除原子類別") {
                         handleReassignAndSubDelete()
                     }.disabled(selectedTargetSubcategoryID == nil || availableTargetSubcategories.isEmpty)
                 }
             }
-            .navigationTitle("Select Target Subcategory")
-            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { onCompletion(false); dismiss() } } }
+            .navigationTitle("選擇目標子類別")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        onCompletion(false)
+                        dismiss()
+                    }
+                }
+            }
             .onAppear {
                 if selectedTargetSubcategoryID == nil, let firstAvailable = availableTargetSubcategories.first {
                     selectedTargetSubcategoryID = firstAvailable.id
@@ -727,13 +726,16 @@ struct ReassignSubcategoryTransactionsView: View {
         guard let targetID = selectedTargetSubcategoryID,
               let targetSub = availableTargetSubcategories.first(where: { $0.id == targetID }) else {
             print("Error: No valid target subcategory for reassignment.")
-            onCompletion(false); return
+            onCompletion(false)
+            return
         }
         if dataController.reassignTransactions(from: subcategoryToReassignFrom, to: targetSub) {
             dataController.deleteSubcategory(subcategoryToReassignFrom, from: parentCategory)
-            onCompletion(true); dismiss()
+            onCompletion(true)
+            dismiss()
         } else {
-            print("Error: Subcategory transaction reassignment failed."); onCompletion(false)
+            print("Error: Subcategory transaction reassignment failed.")
+            onCompletion(false)
         }
     }
 }
