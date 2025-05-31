@@ -1,98 +1,369 @@
-//
-//  HomePageView.swift
-//  AniMoney
-//
-//  Created by 陳軒崇 on 2025/5/21.
-//
-
 import SwiftUI
-import SwiftData
 
 struct HomePageView: View {
-    // 從環境中獲取 DataController
     @EnvironmentObject var dataController: DataController
-    // 如果需要手動操作 context（例如刪除），仍然可以獲取
-    // @Environment(\.modelContext) private var modelContext
-
+    @State private var showingSearchView = false
+    
+    // 計算最近的交易（最新的10筆）
+    private var recentTransactions: [Transaction] {
+        dataController.transactions
+            .sorted { $0.date > $1.date }
+            .prefix(10)
+            .map { $0 }
+    }
+    
+    // 計算今日統計
+    private var todayStats: (count: Int, total: Int) {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) ?? Date()
+        
+        let todayTransactions = dataController.transactions.filter { transaction in
+            transaction.date >= today && transaction.date < tomorrow
+        }
+        
+        return (count: todayTransactions.count, total: todayTransactions.reduce(0) { $0 + $1.amount })
+    }
+    
+    // 計算本月統計
+    private var monthStats: (count: Int, total: Int) {
+        let now = Date()
+        let monthInterval = Calendar.current.dateInterval(of: .month, for: now)
+        
+        let monthTransactions = dataController.transactions.filter { transaction in
+            if let interval = monthInterval {
+                return transaction.date >= interval.start && transaction.date <= interval.end
+            }
+            return false
+        }
+        
+        return (count: monthTransactions.count, total: monthTransactions.reduce(0) { $0 + $1.amount })
+    }
+    
+    // 計算各類別本月花費
+    private var categorySpending: [(category: Category, amount: Int)] {
+        let now = Date()
+        let monthInterval = Calendar.current.dateInterval(of: .month, for: now)
+        
+        let monthTransactions = dataController.transactions.filter { transaction in
+            if let interval = monthInterval {
+                return transaction.date >= interval.start && transaction.date <= interval.end
+            }
+            return false
+        }
+        
+        let categoryTotals = Dictionary(grouping: monthTransactions) { $0.category }
+            .mapValues { transactions in
+                transactions.reduce(0) { $0 + $1.amount }
+            }
+            .compactMap { (category, amount) -> (category: Category, amount: Int)? in
+                guard amount > 0 else { return nil }
+                return (category: category, amount: amount)
+            }
+            .sorted { $0.amount > $1.amount }
+        
+        return Array(categoryTotals.prefix(5)) // 只顯示前5名
+    }
+    
     var body: some View {
-        NavigationView { // 或者 NavigationStack
-            VStack {
-                // 使用 dataController.transactions
-                if dataController.transactions.isEmpty {
-                    ContentUnavailableView(
-                        "No Transactions Yet",
-                        systemImage: "list.bullet.clipboard",
-                        description: Text("Tap the '+' button to add your first transaction.")
-                    )
-                } else {
-                    List {
-                        // 對 dataController.transactions 進行排序，如果 DataController 中的 fetchAll 沒有排序的話
-                        // 或者確保 DataController.fetchAll() 獲取時已經排序
-                        // 這裡假設 DataController.transactions 已經是期望的順序 (例如，fetchAll 中 sortBy date reverse)
-                        ForEach(dataController.transactions) { tx in
-                            TransactionRow(transaction: tx)
+        ScrollView {
+            LazyVStack(spacing: 20) {
+                // 歡迎標題區域
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("歡迎回來！")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                            
+                            Text("今天是 \(DateFormatter.longDate.string(from: Date()))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        // 如果需要刪除功能，可以添加 .onDelete
-                        // .onDelete(perform: deleteTransactionsViaDataController)
+                        
+                        Spacer()
+                        
+                        // 今日快速統計
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("今日")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(todayStats.count) 筆")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Text("$\(todayStats.total)")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.blue)
+                        }
                     }
                 }
+                .padding()
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                
+                // 月度統計卡片
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("本月概覽")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text(DateFormatter.monthYear.string(from: Date()))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 20) {
+                        // 交易筆數
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("交易筆數")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(monthStats.count)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                        }
+                        
+                        Spacer()
+                        
+                        // 總支出
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("總支出")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("$\(monthStats.total)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.red)
+                        }
+                    }
+                    
+                    // 平均每日支出
+                    if monthStats.count > 0 {
+                        let currentDay = Calendar.current.component(.day, from: Date())
+                        let averageDaily = monthStats.total / currentDay
+                        
+                        HStack {
+                            Text("平均每日")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("$\(averageDaily)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                
+                // 類別支出排行
+                if !categorySpending.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("本月支出排行")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        ForEach(Array(categorySpending.enumerated()), id: \.offset) { index, item in
+                            HStack {
+                                // 排名
+                                Text("\(index + 1)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(width: 20, height: 20)
+                                    .background(rankingColor(for: index))
+                                    .clipShape(Circle())
+                                
+                                // 類別名稱
+                                Text(item.category.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Spacer()
+                                
+                                // 金額和比例
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("$\(item.amount)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    
+                                    if monthStats.total > 0 {
+                                        let percentage = (Double(item.amount) / Double(monthStats.total)) * 100
+                                        Text("\(String(format: "%.1f", percentage))%")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                }
+                
+                // 最近交易
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("最近交易")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text("最新 \(recentTransactions.count) 筆")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if recentTransactions.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "list.bullet.clipboard")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                            Text("還沒有任何交易記錄")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    } else {
+                        ForEach(recentTransactions) { transaction in
+                            HomeTransactionRow(transaction: transaction)
+                            
+                            if transaction.id != recentTransactions.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
             }
-            .navigationTitle("All Transactions")
-            // .toolbar {
-            //     ToolbarItem(placement: .navigationBarTrailing) {
-            //         Button {
-            //             // 導航到 AddTransactionView 或彈出 Sheet
-            //             // 動作應該是調用 DataController 的方法
-            //         } label: {
-            //             Label("Add Transaction", systemImage: "plus.circle.fill")
-            //         }
-            //     }
-            // }
-            // .onAppear {
-            //     // 如果需要在視圖出現時強制刷新 (通常 DataController 的 @Published 會自動處理)
-            //     // dataController.fetchAll()
-            // }
+            .padding()
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("記帳")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingSearchView = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.primary)
+                }
+            }
+        }
+        .sheet(isPresented: $showingSearchView) {
+            SearchTransactionsView()
+                .environmentObject(dataController)
         }
     }
-
-    // 範例：通過 DataController 刪除交易
-    // func deleteTransactionsViaDataController(offsets: IndexSet) {
-    //     withAnimation {
-    //         offsets.map { dataController.transactions[$0] }.forEach { transaction in
-    //             dataController.deleteTransaction(transaction) // DataController 內部會調用 save 和 fetchAll
-    //         }
-    //     }
-    // }
+    
+    // 排名顏色
+    private func rankingColor(for index: Int) -> Color {
+        switch index {
+        case 0: return .yellow // 金牌
+        case 1: return .gray   // 銀牌
+        case 2: return .brown  // 銅牌
+        default: return .blue  // 其他
+        }
+    }
 }
 
-// TransactionRow 保持不變
-struct TransactionRow: View {
+// MARK: - 首頁交易行組件
+struct HomeTransactionRow: View {
     let transaction: Transaction
-
+    
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd HH:mm"
+        return formatter
+    }
+    
     var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("\(transaction.category.name) / \(transaction.subcategory.name)")
-                    .font(.headline)
+        HStack(alignment: .top, spacing: 12) {
+            // 類別圓形圖標
+            VStack {
+                Text(String(transaction.category.name.prefix(1)))
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            .frame(width: 28, height: 28)
+            .background(Color.blue)
+            .clipShape(Circle())
+            
+            // 交易信息
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(transaction.subcategory.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Spacer()
+                    
+                    Text("$\(transaction.amount)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+                
+                HStack {
+                    Text(transaction.category.name)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if let project = transaction.project {
+                        Text("• \(project.name)")
+                            .font(.caption)
+                            .foregroundColor(.purple)
+                    }
+                    
+                    Spacer()
+                    
+                    Text(timeFormatter.string(from: transaction.date))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
                 if let note = transaction.note, !note.isEmpty {
                     Text(note)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                }
-                if let project = transaction.project {
-                    Text("Project: \(project.name)")
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .padding(.top, 1)
                 }
             }
-            Spacer()
-            Text("\(transaction.amount)")
-                .font(.title3)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
+}
+
+// MARK: - DateFormatter 擴展（在 struct 外部）
+extension DateFormatter {
+    static let longDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        return formatter
+    }()
+    
+    static let monthYear: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年 MM月"
+        return formatter
+    }()
 }
 
 #Preview {
     HomePageView()
+        .environmentObject(try! DataController())
 }
