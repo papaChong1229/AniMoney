@@ -204,22 +204,34 @@ struct EditTransactionView: View {
                             // 相簿選擇按鈕
                             PhotosPicker(
                                 selection: $newPhotoItems,
-                                maxSelectionCount: calculateMaxSelection(),
+                                maxSelectionCount: 5,
                                 matching: .images
                             ) {
                                 HStack {
-                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Image(systemName: existingImages.isEmpty ? "camera.fill" : "photo.badge.plus")
                                         .foregroundColor(.blue)
-                                    Text("相簿")
-                                        .font(.subheadline)
+                                    Text(existingImages.isEmpty ? "選擇照片" : "新增照片")
                                         .foregroundColor(.blue)
+                                    Spacer()
+                                    if !newImages.isEmpty {
+                                        Text("+\(newImages.count)")
+                                            .font(.caption)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(Color.green)
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.blue.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .padding(.vertical, 12)  // 增加垂直填充
+                                .padding(.horizontal, 16) // 增加水平填充
+                                .frame(maxWidth: .infinity, minHeight: 44) // 確保最小點擊高度
+                                .contentShape(Rectangle()) // 明確設定點擊區域為整個矩形
+                                .background(Color.blue.opacity(0.05)) // 添加淺色背景便於識別點擊區域
+                                .cornerRadius(8) // 圓角
                             }
-                            .disabled(isLoadingPhotos || totalPhotoCount >= 5)
+                            .disabled(isLoadingPhotos)
+                            .buttonStyle(PlainButtonStyle()) // 使用純淨按鈕樣式
                             
                             // 相機拍照按鈕
                             Button {

@@ -169,18 +169,30 @@ struct AddTransactionView: View {
                                 matching: .images
                             ) {
                                 HStack {
-                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Image(systemName: "camera.fill")
                                         .foregroundColor(.blue)
-                                    Text("相簿")
-                                        .font(.subheadline)
+                                    Text("選擇照片")
                                         .foregroundColor(.blue)
+                                    Spacer()
+                                    if !selectedImages.isEmpty {
+                                        Text("\(selectedImages.count)")
+                                            .font(.caption)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(Color.green)
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(Color.blue.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .padding(.horizontal, 16)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
+                                .background(Color.blue.opacity(0.05))
+                                .cornerRadius(8)
                             }
                             .disabled(isLoadingPhotos)
+                            .buttonStyle(PlainButtonStyle())
                             
                             // 相機拍照按鈕
                             Button {
