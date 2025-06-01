@@ -24,17 +24,24 @@ struct EditTransactionView: View {
     @State private var newImages: [UIImage] = []
     @State private var existingImages: [UIImage] = []
     @State private var isLoadingPhotos = false
-    
-    // 相機相關狀態
-    @State private var showingCamera = false
 
-    // UI 狀態
-    @State private var showingCategoryPicker = false
-    @State private var showingSubcategoryPicker = false
-    @State private var showingProjectPicker = false
+    // UI 狀態 - 修正多個 sheet 同時呈現的問題
+    @State private var activeSheet: ActiveSheet?
+    
+    enum ActiveSheet: Identifiable {
+        case currencyInfo
+        case categoryPicker
+        case subcategoryPicker
+        case projectPicker
+        case camera
+        
+        var id: Int {
+            hashValue
+        }
+    }
+
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @State private var showingCurrencyInfo = false
 
     // 檢查表單是否有效
     private var isFormValid: Bool {
@@ -82,7 +89,7 @@ struct EditTransactionView: View {
                     // 匯率資訊按鈕
                     if selectedCurrency != .twd {
                         Button("查看匯率資訊") {
-                            showingCurrencyInfo = true
+                            activeSheet = .currencyInfo
                         }
                         .foregroundColor(.blue)
                         .font(.caption)
@@ -97,13 +104,13 @@ struct EditTransactionView: View {
                                 .font(.headline)
                             Spacer()
                             Button("更改") {
-                                showingCategoryPicker = true
+                                activeSheet = .categoryPicker
                             }
                             .foregroundColor(.blue)
                         }
                     } else {
                         Button("選擇類別") {
-                            showingCategoryPicker = true
+                            activeSheet = .categoryPicker
                         }
                         .foregroundColor(.blue)
                     }
@@ -121,13 +128,13 @@ struct EditTransactionView: View {
                                 .font(.headline)
                             Spacer()
                             Button("更改") {
-                                showingSubcategoryPicker = true
+                                activeSheet = .subcategoryPicker
                             }
                             .foregroundColor(.blue)
                         }
                     } else {
                         Button("選擇子類別") {
-                            showingSubcategoryPicker = true
+                            activeSheet = .subcategoryPicker
                         }
                         .foregroundColor(.blue)
                         .disabled(selectedCategory == nil)
@@ -142,21 +149,21 @@ struct EditTransactionView: View {
                                 .font(.headline)
                             Spacer()
                             Button("更改") {
-                                showingProjectPicker = true
+                                activeSheet = .projectPicker
                             }
                             .foregroundColor(.blue)
                         }
                     } else {
                         Button("選擇項目") {
-                            showingProjectPicker = true
+                            activeSheet = .projectPicker
                         }
                         .foregroundColor(.blue)
                     }
                 }
 
-                // MARK: - 多張照片編輯區域（改進版）
+                // MARK: - 多張照片編輯區域（修復版）
                 Section(header: Text("收據照片（可選）")) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) { // 增加間距，避免按鈕過於接近
                         // 顯示現有照片
                         if !existingImages.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
@@ -184,85 +191,97 @@ struct EditTransactionView: View {
                                     }
                                 }
                                 
-                                Button("移除所有現有照片") {
-                                    withAnimation {
-                                        existingImages.removeAll()
+                                // 修復「移除所有現有照片」按鈕
+                                HStack {
+                                    Spacer()
+                                    Button("移除所有現有照片") {
+                                        withAnimation {
+                                            existingImages.removeAll()
+                                        }
                                     }
+                                    .foregroundColor(.red)
+                                    .font(.caption)
+                                    .buttonStyle(PlainButtonStyle()) // 重要：限制按鈕樣式
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.red.opacity(0.1))
+                                    .cornerRadius(4)
+                                    .contentShape(Rectangle()) // 限制點擊區域
+                                    Spacer()
                                 }
-                                .foregroundColor(.red)
-                                .font(.caption)
+                                .padding(.top, 8) // 與上方內容保持距離
                             }
+                            .padding(.bottom, 8) // 與下方按鈕保持距離
                         }
                         
-                        // 分隔線（當有現有照片且要新增照片時）
+                        // 分隔線
                         if !existingImages.isEmpty && (!newImages.isEmpty || !newPhotoItems.isEmpty) {
                             Divider()
                         }
                         
-                        // 照片選擇選項按鈕
-                        HStack(spacing: 12) {
-                            // 相簿選擇按鈕
-                            PhotosPicker(
-                                selection: $newPhotoItems,
-                                maxSelectionCount: 5,
-                                matching: .images
-                            ) {
-                                HStack {
-                                    Image(systemName: existingImages.isEmpty ? "camera.fill" : "photo.badge.plus")
-                                        .foregroundColor(.blue)
-                                    Text(existingImages.isEmpty ? "選擇照片" : "新增照片")
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                    if !newImages.isEmpty {
-                                        Text("+\(newImages.count)")
-                                            .font(.caption)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 2)
-                                            .background(Color.green)
-                                            .clipShape(Capsule())
+                        // 照片選擇按鈕區域（修復點擊區域版）
+                        VStack(spacing: 12) {
+                            HStack(spacing: 16) {
+                                // 拍照按鈕 - 完全限制點擊區域
+                                Button {
+                                    activeSheet = .camera
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "camera.fill")
+                                            .foregroundColor(.blue)
+                                            .font(.subheadline)
+                                        Text("拍照")
+                                            .foregroundColor(.blue)
+                                            .fontWeight(.medium)
+                                            .font(.subheadline)
                                     }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44) // 固定高度
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
                                 }
-                                .padding(.vertical, 12)  // 增加垂直填充
-                                .padding(.horizontal, 16) // 增加水平填充
-                                .frame(maxWidth: .infinity, minHeight: 44) // 確保最小點擊高度
-                                .contentShape(Rectangle()) // 明確設定點擊區域為整個矩形
-                                .background(Color.blue.opacity(0.05)) // 添加淺色背景便於識別點擊區域
-                                .cornerRadius(8) // 圓角
+                                .buttonStyle(PlainButtonStyle()) // 移除預設按鈕樣式
+                                .contentShape(RoundedRectangle(cornerRadius: 8)) // 嚴格限制點擊區域
+                                .disabled(isLoadingPhotos)
+                                
+                                // 選擇照片按鈕（PhotosPicker）- 限制點擊區域
+                                PhotosPicker(
+                                    selection: $newPhotoItems,
+                                    maxSelectionCount: 5,
+                                    matching: .images
+                                ) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "photo.on.rectangle")
+                                            .foregroundColor(.green)
+                                            .font(.subheadline)
+                                        Text("選擇照片")
+                                            .foregroundColor(.green)
+                                            .fontWeight(.medium)
+                                            .font(.subheadline)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44) // 固定高度
+                                    .background(Color.green.opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(PlainButtonStyle()) // 移除預設按鈕樣式
+                                .contentShape(RoundedRectangle(cornerRadius: 8)) // 嚴格限制點擊區域
+                                .disabled(isLoadingPhotos)
                             }
-                            .disabled(isLoadingPhotos)
-                            .buttonStyle(PlainButtonStyle()) // 使用純淨按鈕樣式
                             
-                            // 相機拍照按鈕
-                            Button {
-                                showingCamera = true
-                            } label: {
+                            // 載入指示器
+                            if isLoadingPhotos {
                                 HStack {
-                                    Image(systemName: "camera.fill")
-                                        .foregroundColor(.green)
-                                    Text("拍照")
-                                        .font(.subheadline)
-                                        .foregroundColor(.green)
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("載入照片中...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.green.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .padding(.top, 4)
                             }
-                            .disabled(isLoadingPhotos || totalPhotoCount >= 5)
                         }
                         
-                        // 載入指示器
-                        if isLoadingPhotos {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("處理照片中...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
                         // 顯示新選擇的照片
                         if !newImages.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
@@ -290,15 +309,28 @@ struct EditTransactionView: View {
                                     }
                                 }
                                 
-                                Button("清除新增照片") {
-                                    clearNewPhotos()
+                                // 修復「清除新增照片」按鈕
+                                HStack {
+                                    Spacer()
+                                    Button("清除新增照片") {
+                                        clearNewPhotos()
+                                    }
+                                    .foregroundColor(.red)
+                                    .font(.caption)
+                                    .buttonStyle(PlainButtonStyle()) // 重要：限制按鈕樣式
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.red.opacity(0.1))
+                                    .cornerRadius(4)
+                                    .contentShape(Rectangle()) // 限制點擊區域
+                                    Spacer()
                                 }
-                                .foregroundColor(.red)
-                                .font(.caption)
+                                .padding(.top, 8)
                             }
                         }
                         
                         // 照片總數提示
+                        let totalPhotoCount = existingImages.count + newImages.count
                         if totalPhotoCount > 0 {
                             HStack {
                                 Image(systemName: "info.circle.fill")
@@ -311,30 +343,25 @@ struct EditTransactionView: View {
                                 
                                 Spacer()
                                 
-                                if totalPhotoCount >= 5 {
-                                    Text("已達上限")
+                                if totalPhotoCount > 5 {
+                                    Text("⚠️ 超過建議的5張")
                                         .font(.caption)
                                         .foregroundColor(.orange)
-                                } else {
-                                    Text("最多5張")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
                                 }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.blue.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .cornerRadius(6)
                         }
                     }
                 }
 
-                // MARK: - 備註和日期（移除時間選擇）
+                // MARK: - 備註和日期
                 Section(header: Text("詳細資訊")) {
                     TextField("備註（可選）", text: $note)
                     
-                    // 只選擇日期，不包含時間
-                    DatePicker("日期", selection: $date, displayedComponents: .date)
+                    DatePicker("日期", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 }
 
                 // MARK: - 儲存按鈕
@@ -368,71 +395,67 @@ struct EditTransactionView: View {
             } message: {
                 Text(alertMessage)
             }
-            .sheet(isPresented: $showingCamera) {
-                CameraView { image in
-                    addCameraPhoto(image)
+        }
+        .onAppear {
+            initializeFormData()
+        }
+        // 修正 onChange 回調，防止意外清空現有照片
+        .onChange(of: newPhotoItems) { oldValue, newItems in
+            // 只在實際有變化時處理
+            if oldValue != newItems {
+                print("📸 PhotosPicker 選擇變化，當前現有照片數量：\(existingImages.count)")
+                Task {
+                    await loadNewPhotos(from: newItems)
                 }
             }
-            .sheet(isPresented: $showingCurrencyInfo) {
+        }
+        // 使用統一的 sheet 管理
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .currencyInfo:
                 CurrencyInfoView()
                     .environmentObject(currencyService)
-            }
-            .sheet(isPresented: $showingCategoryPicker) {
+            case .categoryPicker:
                 CategoryPickerView(selectedCategory: $selectedCategory, selectedSubcategory: $selectedSubcategory)
                     .environmentObject(dataController)
-            }
-            .sheet(isPresented: $showingSubcategoryPicker) {
+            case .subcategoryPicker:
                 SubcategoryPickerView(
                     category: selectedCategory,
                     selectedSubcategory: $selectedSubcategory
                 )
                 .environmentObject(dataController)
-            }
-            .sheet(isPresented: $showingProjectPicker) {
+            case .projectPicker:
                 ProjectPickerView(selectedProject: $selectedProject)
                     .environmentObject(dataController)
-            }
-        }
-        .onAppear {
-            initializeFormData()
-        }
-        .onChange(of: newPhotoItems) { _, newItems in
-            Task {
-                await loadNewPhotos(from: newItems)
+            case .camera:
+                CameraView { image in
+                    handleCameraPhoto(image)
+                }
             }
         }
     }
     
-    // MARK: - 計算屬性
-    private var totalPhotoCount: Int {
-        existingImages.count + newImages.count
-    }
-    
-    private func calculateMaxSelection() -> Int {
-        max(0, 5 - existingImages.count)
-    }
-    
-    // MARK: - 加入相機拍攝的照片
-    private func addCameraPhoto(_ image: UIImage) {
-        withAnimation {
-            // 檢查是否已達到最大數量
-            guard totalPhotoCount < 5 else {
-                alertMessage = "最多只能選擇 5 張照片"
-                showingAlert = true
-                return
-            }
-            
-            let compressedData = compressImage(image, maxSizeKB: 500)
-            if let compressedImage = UIImage(data: compressedData) {
-                newImages.append(compressedImage)
-            }
+    // MARK: - 處理拍照結果（修復版）
+    private func handleCameraPhoto(_ image: UIImage) {
+        print("📸 拍照完成，處理前現有照片數量：\(existingImages.count)")
+        
+        // 壓縮圖片
+        let compressedData = compressImage(image, maxSizeKB: 500)
+        if let compressedImage = UIImage(data: compressedData) {
+            // 只添加到新照片陣列，不要動現有照片
+            newImages.append(compressedImage)
+            print("📸 成功添加相機拍攝的照片，目前新照片共 \(newImages.count) 張")
+            print("📸 處理後現有照片數量：\(existingImages.count)")
         }
         
-        print("📸 成功添加相機拍攝的照片，目前共 \(totalPhotoCount) 張")
+        // 關閉 sheet
+        activeSheet = nil
     }
     
     // MARK: - 初始化表單數據
     private func initializeFormData() {
+        print("🔍 初始化表單數據")
+        
         // 初始化基本資料
         amountText = String(transaction.amount)
         selectedCurrency = .twd // 編輯時預設為台幣（因為儲存時已轉換）
@@ -444,12 +467,15 @@ struct EditTransactionView: View {
         selectedSubcategory = transaction.subcategory
         selectedProject = transaction.project
         
-        // 載入現有照片
+        // 載入現有照片（只在初始化時調用一次）
         loadExistingPhotos()
     }
     
-    // MARK: - 載入現有照片
+    // MARK: - 載入現有照片（修復版）
     private func loadExistingPhotos() {
+        print("🔍 loadExistingPhotos 被調用")
+        
+        // 清空現有陣列
         existingImages.removeAll()
         
         if let photosData = transaction.photosData {
@@ -463,24 +489,17 @@ struct EditTransactionView: View {
         print("📸 載入了 \(existingImages.count) 張現有照片")
     }
     
-    // MARK: - 載入新選擇的照片
+    // MARK: - 載入新選擇的照片（修復版）
     @MainActor
     private func loadNewPhotos(from items: [PhotosPickerItem]) async {
+        print("📸 開始載入新照片，當前現有照片數量：\(existingImages.count)")
+        
         isLoadingPhotos = true
         
-        // 計算可以加入的照片數量
-        let remainingSlots = 5 - existingImages.count
-        let itemsToProcess = Array(items.prefix(remainingSlots))
-        
-        if items.count > remainingSlots {
-            alertMessage = "最多只能選擇 5 張照片，已自動選取前 \(remainingSlots) 張"
-            showingAlert = true
-        }
-        
-        // 清除之前的新照片
+        // 只清空新照片陣列
         newImages.removeAll()
         
-        for item in itemsToProcess {
+        for item in items {
             do {
                 if let data = try await item.loadTransferable(type: Data.self) {
                     if let image = UIImage(data: data) {
@@ -497,6 +516,7 @@ struct EditTransactionView: View {
         
         isLoadingPhotos = false
         print("📸 成功載入 \(newImages.count) 張新照片")
+        print("📸 載入後現有照片數量：\(existingImages.count)")
     }
     
     // MARK: - 移除現有照片
@@ -615,6 +635,42 @@ struct EditTransactionView: View {
     }
 }
 
+// MARK: - 簡單的相機視圖
+struct CameraView: UIViewControllerRepresentable {
+    let onImageCaptured: (UIImage) -> Void
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraView
+        
+        init(_ parent: CameraView) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onImageCaptured(image)
+            }
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            // 相機取消時不做任何事
+        }
+    }
+}
+
 // MARK: - 現有照片卡片
 struct ExistingPhotoCard: View {
     let image: UIImage
@@ -700,47 +756,3 @@ struct NewPhotoCard: View {
         }
     }
 }
-
-// MARK: - 相機視圖（共用）
-struct CameraView: UIViewControllerRepresentable {
-    let onImageCaptured: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .camera
-        picker.allowsEditing = true
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraView
-        
-        init(parent: CameraView) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
-                parent.onImageCaptured(editedImage)
-            } else if let originalImage = info[.originalImage] as? UIImage {
-                parent.onImageCaptured(originalImage)
-            }
-            
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
-    }
-}
-
-
