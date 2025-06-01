@@ -25,6 +25,13 @@ extension DateFormatter {
         formatter.dateFormat = "yyyy年 MM月"
         return formatter
     }()
+    
+    static let timeOnly: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 // MARK: - Calendar 擴展
