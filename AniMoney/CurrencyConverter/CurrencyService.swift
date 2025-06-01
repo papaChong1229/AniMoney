@@ -30,11 +30,11 @@ enum Currency: String, CaseIterable, Identifiable {
     
     var symbol: String {
         switch self {
-        case .twd: return "NT$"
-        case .jpy: return "¥"
-        case .usd: return "$"
-        case .krw: return "₩"
-        case .cny: return "¥"
+        case .twd: return "🇹🇼 NT$"
+        case .jpy: return "🇯🇵 JPY¥"
+        case .usd: return "🇺🇸 USD$"
+        case .krw: return "🇰🇷 KRW₩"
+        case .cny: return "🇨🇳 CNY¥"
         }
     }
     
