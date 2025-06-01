@@ -214,13 +214,21 @@ struct CalendarStatisticView: View {
                         CategoryBarChartView(
                             headerTitle: listHeaderTitle,
                             spendingData: spendingByCategoryForDisplay,
-                            totalAmount: transactionsForDisplay.reduce(0) { $0 + $1.amount }
+                            totalAmount: transactionsForDisplay.reduce(0) { $0 + $1.amount },
+                            dataController: dataController,
+                            filterStartDate: filterStartDate,
+                            filterEndDate: filterEndDate,
+                            selectedDateFromCalendar: selectedDateFromCalendar
                         )
                     case .pieChart:
                         CategoryPieChartView(
                             headerTitle: listHeaderTitle,
                             spendingData: spendingByCategoryForDisplay,
-                            totalAmount: transactionsForDisplay.reduce(0) { $0 + $1.amount }
+                            totalAmount: transactionsForDisplay.reduce(0) { $0 + $1.amount },
+                            dataController: dataController,
+                            filterStartDate: filterStartDate,
+                            filterEndDate: filterEndDate,
+                            selectedDateFromCalendar: selectedDateFromCalendar
                         )
                     }
                 }
@@ -303,6 +311,10 @@ struct CategoryBarChartView: View {
     let headerTitle: String
     let spendingData: [(category: Category, totalAmount: Int)]
     let totalAmount: Int
+    let dataController: DataController
+    let filterStartDate: Date?
+    let filterEndDate: Date?
+    let selectedDateFromCalendar: Date
     
     var body: some View {
         ScrollView {
@@ -367,37 +379,51 @@ struct CategoryBarChartView: View {
                         .padding(.horizontal)
                 }
                 
-                // 詳細數據列表
+                // 詳細數據列表 - 加入導航功能
                 LazyVStack(spacing: 8) {
                     ForEach(spendingData, id: \.category.id) { spending in
-                        HStack {
-                            // 色塊指示器
-                            Rectangle()
-                                .fill(Color.blue)
-                                .frame(width: 12, height: 12)
-                                .cornerRadius(2)
-                            
-                            Text(spending.category.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("$\(spending.totalAmount)")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
+                        NavigationLink(destination: CategorySpecificTransactionsView(
+                            category: spending.category,
+                            initialStartDate: filterStartDate ?? Calendar.current.startOfDay(for: selectedDateFromCalendar),
+                            initialEndDate: filterEndDate ?? Calendar.current.endOfDay(for: selectedDateFromCalendar)
+                        ).environmentObject(dataController)) {
+                            HStack {
+                                // 色塊指示器
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: 12, height: 12)
+                                    .cornerRadius(2)
                                 
-                                let percentage = totalAmount > 0 ? (Double(spending.totalAmount) / Double(totalAmount)) * 100 : 0
-                                Text("\(String(format: "%.1f", percentage))%")
-                                    .font(.caption2)
+                                Text(spending.category.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("$\(spending.totalAmount)")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                    
+                                    let percentage = totalAmount > 0 ? (Double(spending.totalAmount) / Double(totalAmount)) * 100 : 0
+                                    Text("\(String(format: "%.1f", percentage))%")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                // 添加箭頭指示器
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(8)
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal)
@@ -412,6 +438,10 @@ struct CategoryPieChartView: View {
     let headerTitle: String
     let spendingData: [(category: Category, totalAmount: Int)]
     let totalAmount: Int
+    let dataController: DataController
+    let filterStartDate: Date?
+    let filterEndDate: Date?
+    let selectedDateFromCalendar: Date
     
     // 顏色陣列
     private let colors: [Color] = [
@@ -461,41 +491,55 @@ struct CategoryPieChartView: View {
                         .padding(.horizontal)
                 }
                 
-                // 圖例
+                // 圖例 - 加入導航功能
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: 12) {
                     ForEach(Array(spendingData.enumerated()), id: \.element.category.id) { index, spending in
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(colors[index % colors.count])
-                                .frame(width: 12, height: 12)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(spending.category.name)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .lineLimit(1)
+                        NavigationLink(destination: CategorySpecificTransactionsView(
+                            category: spending.category,
+                            initialStartDate: filterStartDate ?? Calendar.current.startOfDay(for: selectedDateFromCalendar),
+                            initialEndDate: filterEndDate ?? Calendar.current.endOfDay(for: selectedDateFromCalendar)
+                        ).environmentObject(dataController)) {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(colors[index % colors.count])
+                                    .frame(width: 12, height: 12)
                                 
-                                HStack {
-                                    Text("$\(spending.totalAmount)")
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(spending.category.name)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .lineLimit(1)
+                                        .foregroundColor(.primary)
                                     
-                                    let percentage = totalAmount > 0 ? (Double(spending.totalAmount) / Double(totalAmount)) * 100 : 0
-                                    Text("(\(String(format: "%.1f", percentage))%)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                    HStack {
+                                        Text("$\(spending.totalAmount)")
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                        
+                                        let percentage = totalAmount > 0 ? (Double(spending.totalAmount) / Double(totalAmount)) * 100 : 0
+                                        Text("(\(String(format: "%.1f", percentage))%)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
+                                
+                                Spacer()
+                                
+                                // 添加箭頭指示器
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
-                            
-                            Spacer()
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 8)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(8)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal)
