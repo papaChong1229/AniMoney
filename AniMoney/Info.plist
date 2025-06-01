@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>我們需要相機權限來拍攝收據照片</string>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>我們需要通知權限來提醒您按時記帳</string>
 </dict>

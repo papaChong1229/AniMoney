@@ -4,6 +4,9 @@ import PhotosUI
 import SwiftUI
 import PhotosUI
 
+import SwiftUI
+import PhotosUI
+
 struct AddTransactionView: View {
     @EnvironmentObject var dataController: DataController
     @ObservedObject var currencyService = CurrencyService.shared
@@ -19,10 +22,14 @@ struct AddTransactionView: View {
     @State private var selectedCurrency: Currency = .twd
     
     // 多張照片相關狀態
-    @State private var selectedPhotoItems: [PhotosPickerItem] = [] // 改為陣列
-    @State private var selectedPhotosData: [Data] = [] // 改為陣列
-    @State private var selectedImages: [UIImage] = [] // 改為陣列
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var selectedPhotosData: [Data] = []
+    @State private var selectedImages: [UIImage] = []
     @State private var isLoadingPhotos = false
+    
+    // 相機相關狀態
+    @State private var showingCamera = false
+    @State private var showingImageSourcePicker = false
 
     // UI 狀態
     @State private var showingCategoryPicker = false
@@ -150,41 +157,85 @@ struct AddTransactionView: View {
                     }
                 }
 
-                // MARK: - 多張照片選擇區域
+                // MARK: - 多張照片選擇區域（改進版）
                 Section(header: Text("收據照片（可選）")) {
                     VStack(spacing: 12) {
-                        // 照片選擇按鈕
-                        PhotosPicker(
-                            selection: $selectedPhotoItems,
-                            maxSelectionCount: 5, // 限制最多5張
-                            matching: .images
-                        ) {
+                        // 照片選擇選項按鈕
+                        HStack(spacing: 12) {
+                            // 相簿選擇按鈕
+                            PhotosPicker(
+                                selection: $selectedPhotoItems,
+                                maxSelectionCount: 5,
+                                matching: .images
+                            ) {
+                                HStack {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .foregroundColor(.blue)
+                                    Text("相簿")
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .disabled(isLoadingPhotos)
+                            
+                            // 相機拍照按鈕
+                            Button {
+                                showingCamera = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "camera.fill")
+                                        .foregroundColor(.green)
+                                    Text("拍照")
+                                        .font(.subheadline)
+                                        .foregroundColor(.green)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.green.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .disabled(isLoadingPhotos)
+                        }
+                        
+                        // 照片數量和限制提示
+                        if !selectedImages.isEmpty {
                             HStack {
-                                Image(systemName: "camera.fill")
+                                Image(systemName: "info.circle.fill")
                                     .foregroundColor(.blue)
-                                Text("選擇照片 (最多5張)")
-                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                
+                                Text("已選擇 \(selectedImages.count) 張照片")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
                                 Spacer()
-                                if !selectedImages.isEmpty {
-                                    Text("\(selectedImages.count)")
+                                
+                                if selectedImages.count >= 5 {
+                                    Text("已達上限")
                                         .font(.caption)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 2)
-                                        .background(Color.green)
-                                        .clipShape(Capsule())
+                                        .foregroundColor(.orange)
+                                } else {
+                                    Text("最多5張")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
                             }
+                            .padding(.horizontal, 8)
                             .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
-                        .disabled(isLoadingPhotos)
                         
                         // 載入指示器
                         if isLoadingPhotos {
                             HStack {
                                 ProgressView()
                                     .scaleEffect(0.8)
-                                Text("載入照片中...")
+                                Text("處理照片中...")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -221,11 +272,12 @@ struct AddTransactionView: View {
                     }
                 }
 
-                // MARK: - 備註和日期
+                // MARK: - 備註和日期（移除時間選擇）
                 Section(header: Text("詳細資訊")) {
                     TextField("備註（可選）", text: $transactionNote)
                     
-                    DatePicker("日期", selection: $transactionDate, displayedComponents: [.date, .hourAndMinute])
+                    // 只選擇日期，不包含時間
+                    DatePicker("日期", selection: $transactionDate, displayedComponents: .date)
                 }
 
                 // MARK: - 儲存按鈕
@@ -259,6 +311,11 @@ struct AddTransactionView: View {
             } message: {
                 Text(alertMessage)
             }
+            .sheet(isPresented: $showingCamera) {
+                CameraView { image in
+                    addCameraPhoto(image)
+                }
+            }
             .sheet(isPresented: $showingCurrencyInfo) {
                 CurrencyInfoView()
                     .environmentObject(currencyService)
@@ -286,14 +343,42 @@ struct AddTransactionView: View {
         }
     }
 
+    // MARK: - 加入相機拍攝的照片
+    private func addCameraPhoto(_ image: UIImage) {
+        withAnimation {
+            // 檢查是否已達到最大數量
+            guard selectedImages.count < 5 else {
+                alertMessage = "最多只能選擇 5 張照片"
+                showingAlert = true
+                return
+            }
+            
+            let compressedData = compressImage(image, maxSizeKB: 500)
+            selectedPhotosData.append(compressedData)
+            
+            if let compressedImage = UIImage(data: compressedData) {
+                selectedImages.append(compressedImage)
+            }
+        }
+        
+        print("📸 成功添加相機拍攝的照片，目前共 \(selectedImages.count) 張")
+    }
+
     // MARK: - 載入選中的多張照片
     @MainActor
     private func loadSelectedPhotos(from items: [PhotosPickerItem]) async {
         isLoadingPhotos = true
-        selectedPhotosData.removeAll()
-        selectedImages.removeAll()
         
-        for item in items {
+        // 計算可以加入的照片數量
+        let remainingSlots = 5 - selectedImages.count
+        let itemsToProcess = Array(items.prefix(remainingSlots))
+        
+        if items.count > remainingSlots {
+            alertMessage = "最多只能選擇 5 張照片，已自動選取前 \(remainingSlots) 張"
+            showingAlert = true
+        }
+        
+        for item in itemsToProcess {
             do {
                 if let data = try await item.loadTransferable(type: Data.self) {
                     if let image = UIImage(data: data) {
@@ -388,7 +473,7 @@ struct AddTransactionView: View {
             amount: Int(round(amountToSave)),
             date: transactionDate,
             note: transactionNote.isEmpty ? nil : transactionNote,
-            photosData: photosToSave, // 傳遞照片陣列
+            photosData: photosToSave,
             project: selectedProject
         )
 
