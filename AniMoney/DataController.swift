@@ -8,14 +8,18 @@ final class DataController: ObservableObject {
     @Published private(set) var categories:   [Category]    = []
     @Published private(set) var projects:     [Project]     = []
     @Published private(set) var transactions: [Transaction] = []
+    
+    // MARK: - 固定開銷相關屬性
+    @Published private(set) var recurringExpenses: [RecurringExpense] = []
 
     init() throws {
         // 確保所有 Model 都已註冊
         container = try ModelContainer(
-            for: Category.self, Subcategory.self, Project.self, Transaction.self
+            for: Category.self, Subcategory.self, Project.self, Transaction.self, RecurringExpense.self
         )
         seedDefaultDataIfNeeded()
         fetchAll()
+        setupRecurringExpenses()
     }
 
     private func seedDefaultDataIfNeeded() {
@@ -444,5 +448,238 @@ final class DataController: ObservableObject {
         if saveContext() {
             fetchAll()
         }
+    }
+    
+    // MARK: - 初始化時加入固定開銷
+    private func setupRecurringExpenses() {
+        // 在 init() 方法中的 container 建立後加入：
+        // container = try ModelContainer(
+        //     for: Category.self, Subcategory.self, Project.self, Transaction.self, RecurringExpense.self
+        // )
+        fetchRecurringExpenses()
+        scheduleRecurringExpenseCheck()
+    }
+    
+    // MARK: - 獲取所有固定開銷
+    func fetchRecurringExpenses() {
+        do {
+            let descriptor = FetchDescriptor<RecurringExpense>(
+                sortBy: [SortDescriptor(\RecurringExpense.nextExecutionDate)]
+            )
+            recurringExpenses = try container.mainContext.fetch(descriptor)
+            print("📅 已載入 \(recurringExpenses.count) 個固定開銷")
+        } catch {
+            print("❌ 獲取固定開銷失敗: \(error)")
+        }
+    }
+    
+    // MARK: - 新增固定開銷
+    func addRecurringExpense(
+        name: String,
+        amount: Int,
+        category: Category,
+        subcategory: Subcategory,
+        recurrenceType: RecurrenceType,
+        monthlyDates: [Int] = [],
+        intervalDays: Int = 30,
+        note: String? = nil,
+        project: Project? = nil
+    ) {
+        // 確保使用管理的實例
+        guard let managedCategory = categories.first(where: { $0.id == category.id }) else {
+            print("❌ 類別不存在"); return
+        }
+        
+        guard let managedSubcategory = managedCategory.subcategories.first(where: { $0.id == subcategory.id }) else {
+            print("❌ 子類別不存在"); return
+        }
+        
+        var managedProject: Project? = nil
+        if let proj = project {
+            managedProject = projects.first(where: { $0.id == proj.id })
+        }
+        
+        let recurringExpense = RecurringExpense(
+            name: name,
+            amount: amount,
+            category: managedCategory,
+            subcategory: managedSubcategory,
+            recurrenceType: recurrenceType,
+            monthlyDates: monthlyDates,
+            intervalDays: intervalDays,
+            note: note,
+            project: managedProject
+        )
+        
+        container.mainContext.insert(recurringExpense)
+        
+        if saveContext() {
+            fetchRecurringExpenses()
+            print("✅ 新增固定開銷: \(name)")
+        }
+    }
+    
+    // MARK: - 更新固定開銷
+    func updateRecurringExpense(
+        _ expense: RecurringExpense,
+        name: String,
+        amount: Int,
+        category: Category,
+        subcategory: Subcategory,
+        recurrenceType: RecurrenceType,
+        monthlyDates: [Int] = [],
+        intervalDays: Int = 30,
+        note: String? = nil,
+        project: Project? = nil,
+        isActive: Bool
+    ) {
+        // 確保使用管理的實例
+        guard let managedCategory = categories.first(where: { $0.id == category.id }) else {
+            print("❌ 類別不存在"); return
+        }
+        
+        guard let managedSubcategory = managedCategory.subcategories.first(where: { $0.id == subcategory.id }) else {
+            print("❌ 子類別不存在"); return
+        }
+        
+        var managedProject: Project? = nil
+        if let proj = project {
+            managedProject = projects.first(where: { $0.id == proj.id })
+        }
+        
+        // 更新屬性
+        expense.name = name
+        expense.amount = amount
+        expense.category = managedCategory
+        expense.subcategory = managedSubcategory
+        expense.recurrenceType = recurrenceType
+        expense.monthlyDates = monthlyDates
+        expense.intervalDays = intervalDays
+        expense.note = note
+        expense.project = managedProject
+        expense.isActive = isActive
+        
+        // 重新計算下次執行日期
+        expense.updateNextExecutionDate()
+        
+        if saveContext() {
+            fetchRecurringExpenses()
+            print("✅ 更新固定開銷: \(name)")
+        }
+    }
+    
+    // MARK: - 刪除固定開銷
+    func deleteRecurringExpense(_ expense: RecurringExpense) {
+        container.mainContext.delete(expense)
+        
+        if saveContext() {
+            fetchRecurringExpenses()
+            print("🗑️ 刪除固定開銷: \(expense.name)")
+        }
+    }
+    
+    // MARK: - 切換固定開銷啟用狀態
+    func toggleRecurringExpenseActive(_ expense: RecurringExpense) {
+        expense.isActive.toggle()
+        
+        if saveContext() {
+            fetchRecurringExpenses()
+            print("🔄 切換固定開銷狀態: \(expense.name) -> \(expense.isActive ? "啟用" : "停用")")
+        }
+    }
+    
+    // MARK: - 檢查並執行到期的固定開銷
+    func checkAndExecuteRecurringExpenses() {
+        let expensesToExecute = recurringExpenses.filter { $0.shouldExecute }
+        
+        guard !expensesToExecute.isEmpty else {
+            print("📅 沒有需要執行的固定開銷")
+            return
+        }
+        
+        print("📅 發現 \(expensesToExecute.count) 個需要執行的固定開銷")
+        
+        for expense in expensesToExecute {
+            // 執行固定開銷，創建交易
+            let transaction = expense.execute()
+            container.mainContext.insert(transaction)
+            
+            print("💰 執行固定開銷: \(expense.name) - $\(expense.amount)")
+        }
+        
+        if saveContext() {
+            fetchAll() // 重新獲取交易
+            fetchRecurringExpenses() // 重新獲取固定開銷
+            
+            // 發送通知（可選）
+            sendRecurringExpenseNotification(count: expensesToExecute.count)
+        }
+    }
+    
+    // MARK: - 發送固定開銷執行通知
+    private func sendRecurringExpenseNotification(count: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = "固定開銷已自動記帳"
+        content.body = "已自動記錄 \(count) 筆固定開銷"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "recurringExpenseExecuted",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ 發送固定開銷通知失敗: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - 排程固定開銷檢查
+    private func scheduleRecurringExpenseCheck() {
+        // 使用 Timer 每小時檢查一次
+        Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            self?.checkAndExecuteRecurringExpenses()
+        }
+        
+        // App 啟動時立即檢查一次
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.checkAndExecuteRecurringExpenses()
+        }
+    }
+    
+    // MARK: - 手動觸發檢查（供 UI 使用）
+    func manualCheckRecurringExpenses() {
+        checkAndExecuteRecurringExpenses()
+    }
+    
+    // MARK: - 獲取即將到期的固定開銷（7天內）
+    func getUpcomingRecurringExpenses() -> [RecurringExpense] {
+        let calendar = Calendar.current
+        let sevenDaysLater = calendar.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+        
+        return recurringExpenses.filter { expense in
+            expense.isActive && expense.nextExecutionDate <= sevenDaysLater
+        }
+    }
+    
+    // MARK: - 固定開銷統計
+    func getRecurringExpenseStats() -> (total: Int, active: Int, monthlyTotal: Int) {
+        let total = recurringExpenses.count
+        let active = recurringExpenses.filter { $0.isActive }.count
+        
+        // 計算每月預估總額
+        let monthlyTotal = recurringExpenses.filter { $0.isActive }.reduce(0) { result, expense in
+            switch expense.recurrenceType {
+            case .monthlyDates:
+                return result + expense.amount * expense.monthlyDates.count
+            case .fixedInterval:
+                let monthlyExecutions = 30 / expense.intervalDays
+                return result + expense.amount * monthlyExecutions
+            }
+        }
+        
+        return (total: total, active: active, monthlyTotal: monthlyTotal)
     }
 }

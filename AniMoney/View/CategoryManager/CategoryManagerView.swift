@@ -182,6 +182,17 @@ struct CategoryManagerView: View {
                             }.buttonStyle(PlainButtonStyle())
                         }.padding(.horizontal)
                     }.padding(.vertical, 20).background(Color(.systemBackground).opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 16)).overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.purple.opacity(0.2), lineWidth: 1)).padding(.horizontal)
+                    
+                    VStack(spacing: 12) {
+                        HStack {
+                            Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                            Image(systemName: "circle.fill").foregroundColor(.secondary.opacity(0.5)).font(.caption2)
+                            Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                        }.padding(.horizontal, 40)
+                    }
+                    
+                    RecurringExpenseSection()
+                        .environmentObject(dataController)
 
                 }
                 .padding(.top, 8)
@@ -619,5 +630,232 @@ struct ReassignProjectTransactionsView: View {
             print("Error: Project transaction operation (reassign to other or nil) failed.")
             onCompletion(false)
         }
+    }
+}
+
+// MARK: - 固定開銷管理區域組件
+struct RecurringExpenseSection: View {
+    @EnvironmentObject var dataController: DataController
+    @State private var showingRecurringExpenseSheet = false
+    @State private var showingAddRecurringExpenseSheet = false
+    
+    // 計算統計
+    private var stats: (total: Int, active: Int, monthlyTotal: Int) {
+        dataController.getRecurringExpenseStats()
+    }
+    
+    private var upcomingExpenses: [RecurringExpense] {
+        Array(dataController.getUpcomingRecurringExpenses().prefix(3)) // 只顯示前3個
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 標題和統計
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundColor(.green)
+                        .font(.title2)
+                    Text("固定開銷")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(stats.active)/\(stats.total) 啟用")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("月預估 NT$\(stats.monthlyTotal)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green.opacity(0.1))
+                .clipShape(Capsule())
+            }
+            .padding(.horizontal)
+            
+            Text("自動管理週期性支出，讓記帳更輕鬆。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+            
+            // 即將到期的固定開銷（縮略版）
+            if !upcomingExpenses.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("即將到期")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Text("7天內")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    
+                    VStack(spacing: 6) {
+                        ForEach(upcomingExpenses) { expense in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(expense.name)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .lineLimit(1)
+                                    Text(expense.nextExecutionDescription)
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                }
+                                
+                                Spacer()
+                                
+                                Text("NT$\(expense.amount)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+            
+            // 操作按鈕
+            HStack(spacing: 12) {
+                // 檢視所有固定開銷
+                Button {
+                    showingRecurringExpenseSheet = true
+                } label: {
+                    HStack {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.caption)
+                        Text("管理全部")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.green.opacity(0.1))
+                    .foregroundColor(.green)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                
+                // 新增固定開銷
+                Button {
+                    showingAddRecurringExpenseSheet = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.caption)
+                        Text("新增固定開銷")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                
+                // 立即檢查
+                Button {
+                    dataController.manualCheckRecurringExpenses()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle")
+                            .font(.caption)
+                        Text("立即檢查")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.blue.opacity(0.1))
+                    .foregroundColor(.blue)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.vertical, 20)
+        .background(Color(.systemBackground).opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .sheet(isPresented: $showingRecurringExpenseSheet) {
+            RecurringExpenseManagementView()
+                .environmentObject(dataController)
+        }
+        .sheet(isPresented: $showingAddRecurringExpenseSheet) {
+            AddRecurringExpenseView()
+                .environmentObject(dataController)
+        }
+    }
+}
+
+// MARK: - 固定開銷卡片（縮略版）
+struct RecurringExpenseCompactCard: View {
+    @EnvironmentObject var dataController: DataController
+    let expense: RecurringExpense
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(expense.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                
+                HStack {
+                    Text(expense.category.name)
+                        .font(.caption2)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.orange.opacity(0.2))
+                        .foregroundColor(.orange)
+                        .clipShape(Capsule())
+                    
+                    Text(expense.recurrenceDescription)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("NT$\(expense.amount)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text(expense.nextExecutionDescription)
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+        )
     }
 }
