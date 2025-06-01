@@ -3,18 +3,21 @@ import PhotosUI
 
 struct EditTransactionView: View {
     @EnvironmentObject private var dataController: DataController
+    @ObservedObject var currencyService = CurrencyService.shared
     @Environment(\.dismiss) private var dismiss
 
     @Bindable var transaction: Transaction
 
     // MARK: - Form State
-    @State private var selectedCategoryIndex: Int = 0
-    @State private var selectedSubcategoryIndex: Int = 0
-    @State private var selectedProjectIndex: Int = 0
-
     @State private var amountText: String = ""
+    @State private var selectedCurrency: Currency = .twd
     @State private var date: Date = Date()
     @State private var note: String = ""
+
+    // Category & Subcategory & Project selection
+    @State private var selectedCategory: Category?
+    @State private var selectedSubcategory: Subcategory?
+    @State private var selectedProject: Project?
 
     // 多張照片相關狀態
     @State private var newPhotoItems: [PhotosPickerItem] = []
@@ -22,65 +25,147 @@ struct EditTransactionView: View {
     @State private var existingImages: [UIImage] = []
     @State private var isLoadingPhotos = false
 
-    private var subcategories: [Subcategory] {
-        guard dataController.categories.indices.contains(selectedCategoryIndex) else {
-            return []
-        }
-        return dataController.categories[selectedCategoryIndex]
-                 .subcategories
-                 .sorted { $0.order < $1.order }
+    // UI 狀態
+    @State private var showingCategoryPicker = false
+    @State private var showingSubcategoryPicker = false
+    @State private var showingProjectPicker = false
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
+    @State private var showingCurrencyInfo = false
+
+    // 檢查表單是否有效
+    private var isFormValid: Bool {
+        !amountText.isEmpty &&
+        Double(amountText) != nil &&
+        Double(amountText)! > 0 &&
+        selectedCategory != nil &&
+        selectedSubcategory != nil
     }
 
     var body: some View {
         NavigationView {
             Form {
-                // ... 類別、金額、日期、備註等其他 Section 保持不變 ...
-                
-                // 1. Category / Subcategory
-                Section("類別") {
-                    Picker("類別", selection: $selectedCategoryIndex) {
-                        ForEach(dataController.categories.indices, id: \.self) { i in
-                            Text(dataController.categories[i].name).tag(i)
+                // MARK: - 金額輸入
+                Section(header: Text("支出金額")) {
+                    HStack {
+                        TextField("請輸入金額", text: $amountText)
+                            .keyboardType(.decimalPad)
+                        
+                        // 貨幣選擇
+                        Picker("貨幣", selection: $selectedCurrency) {
+                            ForEach(Currency.allCases, id: \.self) { currency in
+                                Text(currency.symbol).tag(currency)
+                            }
                         }
-                    }
-                    .onChange(of: selectedCategoryIndex) { _, newValue in
-                        selectedSubcategoryIndex = 0
+                        .pickerStyle(MenuPickerStyle())
                     }
                     
-                    Picker("子類別", selection: $selectedSubcategoryIndex) {
-                        ForEach(subcategories.indices, id: \.self) { j in
-                            Text(subcategories[j].name).tag(j)
+                    // 顯示台幣等值（如果不是台幣）
+                    if selectedCurrency != .twd,
+                       let amount = Double(amountText),
+                       amount > 0 {
+                        let twdAmount = currencyService.convertToTWD(amount: amount, from: selectedCurrency)
+                        HStack {
+                            Text("台幣等值：")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(Currency.twd.formatAmount(twdAmount))
+                                .foregroundColor(.blue)
+                                .fontWeight(.medium)
                         }
+                        .font(.caption)
+                    }
+                    
+                    // 匯率資訊按鈕
+                    if selectedCurrency != .twd {
+                        Button("查看匯率資訊") {
+                            showingCurrencyInfo = true
+                        }
+                        .foregroundColor(.blue)
+                        .font(.caption)
                     }
                 }
 
-                // 2. Amount
-                Section("金額") {
-                    TextField("0", text: $amountText)
-                        .keyboardType(.numberPad)
+                // MARK: - 類別選擇
+                Section(header: Text("支出類別")) {
+                    if let category = selectedCategory {
+                        HStack {
+                            Text(category.name)
+                                .font(.headline)
+                            Spacer()
+                            Button("更改") {
+                                showingCategoryPicker = true
+                            }
+                            .foregroundColor(.blue)
+                        }
+                    } else {
+                        Button("選擇類別") {
+                            showingCategoryPicker = true
+                        }
+                        .foregroundColor(.blue)
+                    }
                 }
 
-                // 3. Date
-                Section("日期") {
-                    DatePicker("", selection: $date, displayedComponents: .date)
-                        .datePickerStyle(.compact)
+                // MARK: - 子類別選擇
+                Section(header: Text("子類別")) {
+                    if selectedCategory == nil {
+                        Text("請先選擇類別")
+                            .foregroundColor(.secondary)
+                            .font(.subheadline)
+                    } else if let subcategory = selectedSubcategory {
+                        HStack {
+                            Text(subcategory.name)
+                                .font(.headline)
+                            Spacer()
+                            Button("更改") {
+                                showingSubcategoryPicker = true
+                            }
+                            .foregroundColor(.blue)
+                        }
+                    } else {
+                        Button("選擇子類別") {
+                            showingSubcategoryPicker = true
+                        }
+                        .foregroundColor(.blue)
+                        .disabled(selectedCategory == nil)
+                    }
                 }
 
-                // 4. Note
-                Section("備註") {
-                    TextEditor(text: $note)
-                        .frame(minHeight: 80)
+                // MARK: - 項目選擇
+                Section(header: Text("項目（可選）")) {
+                    if let project = selectedProject {
+                        HStack {
+                            Text(project.name)
+                                .font(.headline)
+                            Spacer()
+                            Button("更改") {
+                                showingProjectPicker = true
+                            }
+                            .foregroundColor(.blue)
+                        }
+                    } else {
+                        Button("選擇項目") {
+                            showingProjectPicker = true
+                        }
+                        .foregroundColor(.blue)
+                    }
                 }
 
-                // 5. 多張照片編輯
-                Section("照片") {
+                // MARK: - 多張照片編輯區域
+                Section(header: Text("收據照片（可選）")) {
                     VStack(spacing: 12) {
                         // 顯示現有照片
                         if !existingImages.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("現有照片")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                HStack {
+                                    Text("現有照片")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Spacer()
+                                    Text("\(existingImages.count) 張")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                                 
                                 LazyVGrid(columns: [
                                     GridItem(.flexible()),
@@ -96,38 +181,44 @@ struct EditTransactionView: View {
                                     }
                                 }
                                 
-                                if !existingImages.isEmpty {
-                                    Button("移除所有現有照片") {
+                                Button("移除所有現有照片") {
+                                    withAnimation {
                                         existingImages.removeAll()
                                     }
-                                    .foregroundColor(.red)
-                                    .font(.caption)
                                 }
+                                .foregroundColor(.red)
+                                .font(.caption)
                             }
                         }
                         
-                        // 選擇新照片
+                        // 分隔線（當有現有照片且要新增照片時）
+                        if !existingImages.isEmpty && (!newImages.isEmpty || !newPhotoItems.isEmpty) {
+                            Divider()
+                        }
+                        
+                        // 選擇新照片按鈕
                         PhotosPicker(
                             selection: $newPhotoItems,
                             maxSelectionCount: 5,
                             matching: .images
                         ) {
                             HStack {
-                                Image(systemName: "photo.badge.plus")
+                                Image(systemName: existingImages.isEmpty ? "camera.fill" : "photo.badge.plus")
                                     .foregroundColor(.blue)
-                                Text("新增照片")
+                                Text(existingImages.isEmpty ? "選擇照片 (最多5張)" : "新增照片")
                                     .foregroundColor(.blue)
                                 Spacer()
                                 if !newImages.isEmpty {
                                     Text("+\(newImages.count)")
                                         .font(.caption)
                                         .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
+                                        .padding(.horizontal, 8)
                                         .padding(.vertical, 2)
-                                        .background(Color.blue)
+                                        .background(Color.green)
                                         .clipShape(Capsule())
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
                         .disabled(isLoadingPhotos)
                         
@@ -145,9 +236,15 @@ struct EditTransactionView: View {
                         // 顯示新選擇的照片
                         if !newImages.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("新增照片")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                HStack {
+                                    Text("新增照片")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Spacer()
+                                    Text("\(newImages.count) 張")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                                 
                                 LazyVGrid(columns: [
                                     GridItem(.flexible()),
@@ -175,44 +272,86 @@ struct EditTransactionView: View {
                         let totalPhotoCount = existingImages.count + newImages.count
                         if totalPhotoCount > 0 {
                             HStack {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                
                                 Text("總共 \(totalPhotoCount) 張照片")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                
                                 Spacer()
+                                
                                 if totalPhotoCount > 5 {
                                     Text("⚠️ 超過建議的5張")
                                         .font(.caption)
                                         .foregroundColor(.orange)
                                 }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }
 
-                // 6. Project
-                Section("專案") {
-                    Picker("專案", selection: $selectedProjectIndex) {
-                        Text("無").tag(0)
-                        ForEach(dataController.projects.indices, id: \.self) { k in
-                            Text(dataController.projects[k].name).tag(k + 1)
+                // MARK: - 備註和日期
+                Section(header: Text("詳細資訊")) {
+                    TextField("備註（可選）", text: $note)
+                    
+                    DatePicker("日期", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                }
+
+                // MARK: - 儲存按鈕
+                Section {
+                    Button(action: saveChanges) {
+                        HStack {
+                            Spacer()
+                            Text("儲存變更")
+                                .fontWeight(.semibold)
+                            Spacer()
                         }
                     }
+                    .disabled(!isFormValid || isLoadingPhotos)
                 }
             }
             .navigationTitle("編輯交易")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", role: .cancel) {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("儲存") {
-                        saveChanges()
+            }
+            .alert("編輯交易", isPresented: $showingAlert) {
+                Button("確定") {
+                    if alertMessage.contains("成功") {
+                        dismiss()
                     }
-                    .disabled(amountText.isEmpty || subcategories.isEmpty || isLoadingPhotos)
                 }
+            } message: {
+                Text(alertMessage)
+            }
+            .sheet(isPresented: $showingCurrencyInfo) {
+                CurrencyInfoView()
+                    .environmentObject(currencyService)
+            }
+            .sheet(isPresented: $showingCategoryPicker) {
+                CategoryPickerView(selectedCategory: $selectedCategory, selectedSubcategory: $selectedSubcategory)
+                    .environmentObject(dataController)
+            }
+            .sheet(isPresented: $showingSubcategoryPicker) {
+                SubcategoryPickerView(
+                    category: selectedCategory,
+                    selectedSubcategory: $selectedSubcategory
+                )
+                .environmentObject(dataController)
+            }
+            .sheet(isPresented: $showingProjectPicker) {
+                ProjectPickerView(selectedProject: $selectedProject)
+                    .environmentObject(dataController)
             }
         }
         .onAppear {
@@ -227,32 +366,19 @@ struct EditTransactionView: View {
     
     // MARK: - 初始化表單數據
     private func initializeFormData() {
+        // 初始化基本資料
         amountText = String(transaction.amount)
+        selectedCurrency = .twd // 編輯時預設為台幣（因為儲存時已轉換）
         date = transaction.date
         note = transaction.note ?? ""
         
+        // 初始化類別選擇
+        selectedCategory = transaction.category
+        selectedSubcategory = transaction.subcategory
+        selectedProject = transaction.project
+        
         // 載入現有照片
         loadExistingPhotos()
-        
-        // 設定類別選擇
-        if let categoryIndex = dataController.categories.firstIndex(where: { $0.id == transaction.category.id }) {
-            selectedCategoryIndex = categoryIndex
-        }
-        
-        // 設定子類別選擇
-        DispatchQueue.main.async {
-            if let subcategoryIndex = self.subcategories.firstIndex(where: { $0.id == self.transaction.subcategory.id }) {
-                self.selectedSubcategoryIndex = subcategoryIndex
-            }
-        }
-        
-        // 設定專案選擇
-        if let project = transaction.project,
-           let projectIndex = dataController.projects.firstIndex(where: { $0.id == project.id }) {
-            selectedProjectIndex = projectIndex + 1
-        } else {
-            selectedProjectIndex = 0
-        }
     }
     
     // MARK: - 載入現有照片
@@ -266,6 +392,8 @@ struct EditTransactionView: View {
                 }
             }
         }
+        
+        print("📸 載入了 \(existingImages.count) 張現有照片")
     }
     
     // MARK: - 載入新選擇的照片
@@ -290,6 +418,7 @@ struct EditTransactionView: View {
         }
         
         isLoadingPhotos = false
+        print("📸 成功載入 \(newImages.count) 張新照片")
     }
     
     // MARK: - 移除現有照片
@@ -350,17 +479,17 @@ struct EditTransactionView: View {
     
     // MARK: - 儲存變更
     private func saveChanges() {
-        guard let amount = Int(amountText),
-              dataController.categories.indices.contains(selectedCategoryIndex),
-              subcategories.indices.contains(selectedSubcategoryIndex) else {
+        guard let originalAmount = Double(amountText),
+              originalAmount > 0,
+              let category = selectedCategory,
+              let subcategory = selectedSubcategory else {
+            alertMessage = "請檢查輸入的金額、類別和子類別"
+            showingAlert = true
             return
         }
-        
-        let selectedCategory = dataController.categories[selectedCategoryIndex]
-        let selectedSubcategory = subcategories[selectedSubcategoryIndex]
-        let selectedProject: Project? = selectedProjectIndex > 0
-            ? dataController.projects[selectedProjectIndex - 1]
-            : nil
+
+        // 計算要儲存的台幣金額
+        let amountToSave = currencyService.convertToTWD(amount: originalAmount, from: selectedCurrency)
         
         // 合併現有照片和新照片的資料
         var allPhotosData: [Data] = []
@@ -383,16 +512,28 @@ struct EditTransactionView: View {
         
         dataController.updateTransaction(
             transaction,
-            category: selectedCategory,
-            subcategory: selectedSubcategory,
-            amount: amount,
+            category: category,
+            subcategory: subcategory,
+            amount: Int(round(amountToSave)),
             date: date,
             note: note.isEmpty ? nil : note,
             photosData: finalPhotosData,
             project: selectedProject
         )
         
-        dismiss()
+        // 顯示成功訊息
+        var successMessage = "成功更新交易記錄"
+        if selectedCurrency != .twd {
+            let originalAmountText = selectedCurrency.formatAmount(originalAmount)
+            let convertedAmountText = Currency.twd.formatAmount(amountToSave)
+            successMessage += "\n原始金額：\(originalAmountText)\n台幣金額：\(convertedAmountText)"
+        }
+        if !allPhotosData.isEmpty {
+            successMessage += "\n📸 包含 \(allPhotosData.count) 張收據照片"
+        }
+        
+        alertMessage = successMessage
+        showingAlert = true
     }
 }
 
@@ -420,7 +561,7 @@ struct ExistingPhotoCard: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color.green)
+                                .background(Color.orange)
                                 .clipShape(Capsule())
                             Spacer()
                         }
@@ -463,7 +604,7 @@ struct NewPhotoCard: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color.blue)
+                                .background(Color.green)
                                 .clipShape(Capsule())
                             Spacer()
                         }
