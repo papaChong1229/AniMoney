@@ -43,12 +43,14 @@ struct ContentView: View {
             }
             
 
-            SettingView()
-                .tag(4)
-                .tabItem {
-                    Image(systemName: "gearshape.fill")
-                    Text("Setting")
-                }
+            NavigationStack {
+                SettingView()
+            }
+            .tag(4)
+            .tabItem {
+                Image(systemName: "gearshape.fill")
+                Text("Setting")
+            }
         }
         // 監聽分頁變化
         .onChange(of: selectedTab) { oldValue, newValue in
