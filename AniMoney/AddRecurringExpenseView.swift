@@ -277,6 +277,8 @@ struct MonthlyDatesSelector: View {
                     .foregroundColor(selectedDates.contains(day) ? .white : .primary)
                     .clipShape(Circle())
                     .font(.caption)
+                    .buttonStyle(PlainButtonStyle()) // 重要：移除預設按鈕樣式
+                    .contentShape(Circle()) // 嚴格限制為圓形點擊區域
                 }
             }
             
@@ -321,6 +323,8 @@ struct FixedIntervalSelector: View {
                     .foregroundColor(intervalDays == days ? .white : .primary)
                     .clipShape(Capsule())
                     .font(.caption)
+                    .buttonStyle(PlainButtonStyle()) // 重要：移除預設按鈕樣式
+                    .contentShape(Rectangle()) // 嚴格限制為圓形點擊區域
                 }
             }
         }
