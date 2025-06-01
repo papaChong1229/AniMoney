@@ -39,7 +39,7 @@ struct ContentView: View {
             .tag(3)
             .tabItem {
                 Image(systemName: "chart.bar.fill")
-                Text("Calender Statistics")
+                Text("Statistics")
             }
             
 

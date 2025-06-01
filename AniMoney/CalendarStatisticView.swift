@@ -32,6 +32,9 @@ struct CalendarStatisticView: View {
     // 圖表顯示類型狀態
     @State private var selectedChartType: ChartDisplayType = .list
     
+    // 日曆顯示控制
+    @State private var isCalendarVisible: Bool = true
+    
     // 決定當前顯示的是單日還是範圍
     private var isDateRangeSelected: Bool {
         filterStartDate != nil && filterEndDate != nil
@@ -102,80 +105,178 @@ struct CalendarStatisticView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // MARK: - 月曆選擇部分 和 日期範圍篩選按鈕
+            // MARK: - 頂部控制區域
             HStack {
-                Text("") // 可以替換成更合適的標題
-                    .font(.headline)
-                    .padding(.leading)
+                // 日曆顯示切換按鈕
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isCalendarVisible.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: isCalendarVisible ? "calendar.badge.minus" : "calendar.badge.plus")
+                            .font(.title2)
+                        Text(isCalendarVisible ? "隱藏日曆" : "顯示日曆")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.blue)
+                }
+                .padding(.leading)
+                
                 Spacer()
+                
+                // 日期範圍篩選按鈕
                 Button {
                     showingDateFilterSheet = true
                 } label: {
-                    Image(systemName: isDateRangeSelected ? "calendar.circle.fill" : "calendar.circle")
-                        .font(.title2)
-                        .foregroundColor(isDateRangeSelected ? .blue : .secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: isDateRangeSelected ? "calendar.circle.fill" : "calendar.circle")
+                            .font(.title2)
+                        if isDateRangeSelected {
+                            Text("範圍")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                    }
+                    .foregroundColor(isDateRangeSelected ? .blue : .secondary)
                 }
                 .padding(.trailing)
             }
             .padding(.top)
             .padding(.bottom, 8)
 
-            DatePicker(
-                "通過月曆選擇單日",
-                selection: $selectedDateFromCalendar,
-                displayedComponents: .date
-            )
-            .datePickerStyle(.graphical)
-            .labelsHidden()
-            .padding(.horizontal)
-            .padding(.bottom)
-            .onChange(of: selectedDateFromCalendar) { oldValue, newValue in
-                print("Calendar date selected: \(newValue). Clearing date range filter.")
-                filterStartDate = nil
-                filterEndDate = nil
+            // MARK: - 日曆區域 (可隱藏)
+            if isCalendarVisible {
+                DatePicker(
+                    "通過月曆選擇單日",
+                    selection: $selectedDateFromCalendar,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .padding(.horizontal)
+                .padding(.bottom)
+                .onChange(of: selectedDateFromCalendar) { oldValue, newValue in
+                    print("Calendar date selected: \(newValue). Clearing date range filter.")
+                    filterStartDate = nil
+                    filterEndDate = nil
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            Divider()
+            // 分隔線 (只在日曆可見時顯示)
+            if isCalendarVisible {
+                Divider()
+                    .transition(.opacity)
+            }
+
+            // MARK: - 當前選擇的日期顯示 (當日曆隱藏時)
+            if !isCalendarVisible {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("當前選擇")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("選擇日期") {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                isCalendarVisible = true
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    }
+                    
+                    if let startDate = filterStartDate, let endDate = filterEndDate {
+                        HStack {
+                            if Calendar.current.isDate(startDate, inSameDayAs: endDate) {
+                                Text(DateFormatter.longDate.string(from: startDate))
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            } else {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("從 \(DateFormatter.shortDate.string(from: startDate))")
+                                        .font(.subheadline)
+                                    Text("到 \(DateFormatter.shortDate.string(from: endDate))")
+                                        .font(.subheadline)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "calendar.badge.clock")
+                                .foregroundColor(.blue)
+                                .font(.title2)
+                        }
+                    } else {
+                        HStack {
+                            Text(DateFormatter.longDate.string(from: selectedDateFromCalendar))
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Image(systemName: "calendar")
+                                .foregroundColor(.blue)
+                                .font(.title2)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(Color(.systemBackground))
+                .cornerRadius(8)
+                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .padding(.horizontal)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             // MARK: - 圖表類型切換按鈕
             if !transactionsForDisplay.isEmpty {
-                HStack {
-                    Text("顯示方式")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .padding(.leading)
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 0) {
-                        ForEach(ChartDisplayType.allCases, id: \.self) { chartType in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    selectedChartType = chartType
-                                }
-                            } label: {
-                                VStack(spacing: 4) {
-                                    Image(systemName: chartType.icon)
-                                        .font(.caption)
-                                    Text(chartType.rawValue)
-                                        .font(.caption2)
-                                }
-                                .foregroundColor(selectedChartType == chartType ? .white : .blue)
-                                .frame(width: 60, height: 50)
-                                .background(
-                                    selectedChartType == chartType ?
-                                    Color.blue : Color.blue.opacity(0.1)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                VStack(spacing: 0) {
+                    // 分隔線 (當日曆隱藏時才顯示)
+                    if !isCalendarVisible {
+                        Divider()
+                            .transition(.opacity)
                     }
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.trailing)
+                    
+                    HStack {
+                        Text("顯示方式")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .padding(.leading)
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 0) {
+                            ForEach(ChartDisplayType.allCases, id: \.self) { chartType in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        selectedChartType = chartType
+                                    }
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Image(systemName: chartType.icon)
+                                            .font(.caption)
+                                        Text(chartType.rawValue)
+                                            .font(.caption2)
+                                    }
+                                    .foregroundColor(selectedChartType == chartType ? .white : .blue)
+                                    .frame(width: 60, height: 50)
+                                    .background(
+                                        selectedChartType == chartType ?
+                                        Color.blue : Color.blue.opacity(0.1)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .background(Color.gray.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.trailing)
+                    }
+                    .padding(.vertical, 12)
                 }
-                .padding(.vertical, 12)
+                .transition(.opacity)
             }
 
             // MARK: - 消費統計顯示部分
@@ -194,9 +295,12 @@ struct CalendarStatisticView: View {
                         .foregroundColor(.gray)
                     Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // 根據選擇的圖表類型顯示不同的內容
+                // 當日曆隱藏時，給圖表更多高度
+                let chartHeight: CGFloat? = isCalendarVisible ? nil : UIScreen.main.bounds.height * 0.7
+                
                 Group {
                     switch selectedChartType {
                     case .list:
@@ -218,7 +322,8 @@ struct CalendarStatisticView: View {
                             dataController: dataController,
                             filterStartDate: filterStartDate,
                             filterEndDate: filterEndDate,
-                            selectedDateFromCalendar: selectedDateFromCalendar
+                            selectedDateFromCalendar: selectedDateFromCalendar,
+                            isCalendarHidden: !isCalendarVisible
                         )
                     case .pieChart:
                         CategoryPieChartView(
@@ -228,10 +333,12 @@ struct CalendarStatisticView: View {
                             dataController: dataController,
                             filterStartDate: filterStartDate,
                             filterEndDate: filterEndDate,
-                            selectedDateFromCalendar: selectedDateFromCalendar
+                            selectedDateFromCalendar: selectedDateFromCalendar,
+                            isCalendarHidden: !isCalendarVisible
                         )
                     }
                 }
+                .frame(maxHeight: chartHeight)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
@@ -315,6 +422,7 @@ struct CategoryBarChartView: View {
     let filterStartDate: Date?
     let filterEndDate: Date?
     let selectedDateFromCalendar: Date
+    let isCalendarHidden: Bool
     
     var body: some View {
         ScrollView {
@@ -339,7 +447,9 @@ struct CategoryBarChartView: View {
                     .padding(.horizontal)
                 }
                 
-                // 長條圖
+                // 長條圖 - 根據日曆顯示狀態調整高度
+                let chartHeight: CGFloat = isCalendarHidden ? 350 : 250
+                
                 if #available(iOS 16.0, *) {
                     Chart(spendingData, id: \.category.id) { spending in
                         BarMark(
@@ -370,12 +480,12 @@ struct CategoryBarChartView: View {
                             }
                         }
                     }
-                    .frame(height: 250)
+                    .frame(height: chartHeight)
                     .padding(.horizontal)
                 } else {
                     // iOS 15 相容性 - 使用手動繪製的長條圖
                     ManualBarChartView(spendingData: spendingData)
-                        .frame(height: 250)
+                        .frame(height: chartHeight)
                         .padding(.horizontal)
                 }
                 
@@ -442,6 +552,7 @@ struct CategoryPieChartView: View {
     let filterStartDate: Date?
     let filterEndDate: Date?
     let selectedDateFromCalendar: Date
+    let isCalendarHidden: Bool
     
     // 顏色陣列
     private let colors: [Color] = [
@@ -471,7 +582,9 @@ struct CategoryPieChartView: View {
                     .padding(.horizontal)
                 }
                 
-                // 圓餅圖
+                // 圓餅圖 - 根據日曆顯示狀態調整大小
+                let chartHeight: CGFloat = isCalendarHidden ? 400 : 300
+                
                 if #available(iOS 17.0, *) {
                     Chart(spendingData, id: \.category.id) { spending in
                         SectorMark(
@@ -482,12 +595,12 @@ struct CategoryPieChartView: View {
                         .foregroundStyle(colors[spendingData.firstIndex(where: { $0.category.id == spending.category.id }) ?? 0 % colors.count])
                         .opacity(0.8)
                     }
-                    .frame(height: 300)
+                    .frame(height: chartHeight)
                     .padding(.horizontal)
                 } else {
                     // iOS 16 及以下版本的相容性實作
                     ManualPieChartView(spendingData: spendingData, colors: colors)
-                        .frame(height: 300)
+                        .frame(height: chartHeight)
                         .padding(.horizontal)
                 }
                 
