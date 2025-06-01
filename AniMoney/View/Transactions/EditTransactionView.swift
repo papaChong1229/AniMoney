@@ -19,13 +19,26 @@ struct EditTransactionView: View {
     @State private var selectedSubcategory: Subcategory?
     @State private var selectedProject: Project?
 
-    // 多張照片相關狀態
-    @State private var newPhotoItems: [PhotosPickerItem] = []
-    @State private var newImages: [UIImage] = []
-    @State private var existingImages: [UIImage] = []
+    // 照片管理狀態 - 採用類似 AddTransactionView 的分離方式
+    @State private var selectedPhotoItems: [PhotosPickerItem] = [] // PhotosPicker 需要的狀態
+    @State private var cameraImages: [UIImage] = [] // 拍照的照片
+    @State private var cameraPhotosData: [Data] = [] // 拍照的照片數據
+    @State private var pickerImages: [UIImage] = [] // 相簿選擇的照片
+    @State private var pickerPhotosData: [Data] = [] // 相簿選擇的照片數據
+    @State private var existingImages: [UIImage] = [] // 原有照片
+    @State private var existingPhotosData: [Data] = [] // 原有照片數據
     @State private var isLoadingPhotos = false
 
-    // UI 狀態 - 修正多個 sheet 同時呈現的問題
+    // 計算屬性：合併所有照片
+    private var allImages: [UIImage] {
+        return existingImages + cameraImages + pickerImages
+    }
+    
+    private var allPhotosData: [Data] {
+        return existingPhotosData + cameraPhotosData + pickerPhotosData
+    }
+
+    // UI 狀態 - 統一的 sheet 管理
     @State private var activeSheet: ActiveSheet?
     
     enum ActiveSheet: Identifiable {
@@ -163,12 +176,12 @@ struct EditTransactionView: View {
 
                 // MARK: - 多張照片編輯區域（修復版）
                 Section(header: Text("收據照片（可選）")) {
-                    VStack(spacing: 16) { // 增加間距，避免按鈕過於接近
-                        // 顯示現有照片
+                    VStack(spacing: 16) {
+                        // 原有照片區域
                         if !existingImages.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text("現有照片")
+                                    Text("原有照片")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                     Spacer()
@@ -191,33 +204,67 @@ struct EditTransactionView: View {
                                         .id("existing-\(index)")
                                     }
                                 }
-                                
-                                // 修復「移除所有現有照片」按鈕
-                                HStack {
-                                    Spacer()
-                                    Button("移除所有現有照片") {
-                                        withAnimation {
-                                            existingImages.removeAll()
-                                        }
-                                    }
-                                    .foregroundColor(.red)
-                                    .font(.caption)
-                                    .buttonStyle(PlainButtonStyle()) // 重要：限制按鈕樣式
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.red.opacity(0.1))
-                                    .cornerRadius(4)
-                                    .contentShape(Rectangle()) // 限制點擊區域
-                                    Spacer()
-                                }
-                                .padding(.top, 8) // 與上方內容保持距離
                             }
-                            .padding(.bottom, 8) // 與下方按鈕保持距離
                         }
                         
-                        // 分隔線
-                        if !existingImages.isEmpty && (!newImages.isEmpty || !newPhotoItems.isEmpty) {
-                            Divider()
+                        // 拍照的照片區域
+                        if !cameraImages.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "camera.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.caption)
+                                    Text("拍照 (\(cameraImages.count) 張)")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                }
+                                
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)
+                                ], spacing: 12) {
+                                    ForEach(Array(cameraImages.enumerated()), id: \.offset) { index, image in
+                                        CameraPhotoCard(
+                                            image: image,
+                                            index: index,
+                                            onRemove: { removeCameraPhoto(at: index) }
+                                        )
+                                        .id("camera-\(index)")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 相簿選擇的照片區域
+                        if !pickerImages.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "photo.on.rectangle")
+                                        .foregroundColor(.green)
+                                        .font(.caption)
+                                    Text("相簿 (\(pickerImages.count) 張)")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                    Spacer()
+                                }
+                                
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)
+                                ], spacing: 12) {
+                                    ForEach(Array(pickerImages.enumerated()), id: \.offset) { index, image in
+                                        PickerPhotoCard(
+                                            image: image,
+                                            index: index,
+                                            onRemove: { removePickerPhoto(at: index) }
+                                        )
+                                        .id("picker-\(index)")
+                                    }
+                                }
+                            }
                         }
                         
                         // 照片選擇按鈕區域（修復點擊區域版）
@@ -247,7 +294,7 @@ struct EditTransactionView: View {
                                 
                                 // 選擇照片按鈕（PhotosPicker）- 限制點擊區域
                                 PhotosPicker(
-                                    selection: $newPhotoItems,
+                                    selection: $selectedPhotoItems,
                                     maxSelectionCount: 5,
                                     matching: .images
                                 ) {
@@ -283,73 +330,38 @@ struct EditTransactionView: View {
                             }
                         }
                         
-                        // 顯示新選擇的照片
-                        if !newImages.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("新增照片")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Spacer()
-                                    Text("\(newImages.count) 張")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                        // 修復「清除所有照片」按鈕
+                        if !allImages.isEmpty {
+                            HStack {
+                                Spacer()
+                                Button("清除所有照片") {
+                                    clearAllPhotos()
                                 }
-                                
-                                LazyVGrid(columns: [
-                                    GridItem(.flexible(), spacing: 12), // 增加間距
-                                    GridItem(.flexible(), spacing: 12),
-                                    GridItem(.flexible(), spacing: 12)
-                                ], spacing: 12) { // 增加行間距
-                                    ForEach(Array(newImages.enumerated()), id: \.offset) { index, image in
-                                        NewPhotoCard(
-                                            image: image,
-                                            index: index,
-                                            onRemove: {
-                                                print("🗑️ 準備刪除新照片 index: \(index)")
-                                                removeNewPhoto(at: index)
-                                            }
-                                        )
-                                        .id("new-\(index)") // 添加唯一標識符
-                                    }
-                                }
-                                
-                                // 修復「清除新增照片」按鈕
-                                HStack {
-                                    Spacer()
-                                    Button("清除新增照片") {
-                                        clearNewPhotos()
-                                    }
-                                    .foregroundColor(.red)
-                                    .font(.caption)
-                                    .buttonStyle(PlainButtonStyle()) // 重要：限制按鈕樣式
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.red.opacity(0.1))
-                                    .cornerRadius(4)
-                                    .contentShape(Rectangle()) // 限制點擊區域
-                                    Spacer()
-                                }
-                                .padding(.top, 8)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .buttonStyle(PlainButtonStyle()) // 重要：限制按鈕樣式
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(4)
+                                .contentShape(Rectangle()) // 限制點擊區域
+                                Spacer()
                             }
+                            .padding(.top, 8)
                         }
                         
-                        // 照片總數提示
-                        let totalPhotoCount = existingImages.count + newImages.count
-                        if totalPhotoCount > 0 {
+                        // 照片數量提示
+                        if !allImages.isEmpty {
                             HStack {
                                 Image(systemName: "info.circle.fill")
                                     .foregroundColor(.blue)
                                     .font(.caption)
-                                
-                                Text("總共 \(totalPhotoCount) 張照片")
+                                Text("總共 \(allImages.count) 張照片")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                
                                 Spacer()
-                                
-                                if totalPhotoCount > 5 {
-                                    Text("⚠️ 超過建議的5張")
+                                if allImages.count >= 5 {
+                                    Text("已達上限")
                                         .font(.caption)
                                         .foregroundColor(.orange)
                                 }
@@ -404,14 +416,9 @@ struct EditTransactionView: View {
         .onAppear {
             initializeFormData()
         }
-        // 修正 onChange 回調，防止意外清空現有照片
-        .onChange(of: newPhotoItems) { oldValue, newItems in
-            // 只在實際有變化時處理
-            if oldValue != newItems {
-                print("📸 PhotosPicker 選擇變化，當前現有照片數量：\(existingImages.count)")
-                Task {
-                    await loadNewPhotos(from: newItems)
-                }
+        .onChange(of: selectedPhotoItems) { _, newItems in
+            Task {
+                await loadSelectedPhotos(from: newItems)
             }
         }
         // 使用統一的 sheet 管理
@@ -440,21 +447,57 @@ struct EditTransactionView: View {
         }
     }
     
-    // MARK: - 處理拍照結果（修復版）
+    // MARK: - 處理拍照結果
     private func handleCameraPhoto(_ image: UIImage) {
-        print("📸 拍照完成，處理前現有照片數量：\(existingImages.count)")
+        print("📸 拍照完成，添加到拍照照片列表")
         
         // 壓縮圖片
         let compressedData = compressImage(image, maxSizeKB: 500)
-        if let compressedImage = UIImage(data: compressedData) {
-            // 只添加到新照片陣列，不要動現有照片
-            newImages.append(compressedImage)
-            print("📸 成功添加相機拍攝的照片，目前新照片共 \(newImages.count) 張")
-            print("📸 處理後現有照片數量：\(existingImages.count)")
-        }
+        
+        // 添加到拍照陣列
+        cameraImages.append(image)
+        cameraPhotosData.append(compressedData)
+        
+        print("📸 成功添加相機拍攝的照片，拍照總數: \(cameraImages.count)，總照片數: \(allImages.count)")
         
         // 關閉 sheet
         activeSheet = nil
+    }
+    
+    // MARK: - 載入相簿選擇的照片（修復版 - 只替換相簿照片）
+    @MainActor
+    private func loadSelectedPhotos(from items: [PhotosPickerItem]) async {
+        print("📸 開始載入相簿選擇的照片，當前拍照 \(cameraImages.count) 張，相簿 \(pickerImages.count) 張")
+        
+        guard !items.isEmpty else {
+            print("📸 沒有選擇任何照片，清空相簿照片")
+            pickerImages.removeAll()
+            pickerPhotosData.removeAll()
+            return
+        }
+        
+        isLoadingPhotos = true
+        
+        // 清空相簿照片（但保留拍照照片和原有照片）
+        pickerImages.removeAll()
+        pickerPhotosData.removeAll()
+        
+        for item in items {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    if let image = UIImage(data: data) {
+                        let compressedData = compressImage(image, maxSizeKB: 500)
+                        pickerPhotosData.append(compressedData)
+                        pickerImages.append(image)
+                    }
+                }
+            } catch {
+                print("❌ 載入相簿照片失敗: \(error)")
+            }
+        }
+        
+        isLoadingPhotos = false
+        print("📸 成功載入 \(pickerImages.count) 張相簿照片，總照片數: \(allImages.count) 張")
     }
     
     // MARK: - 初始化表單數據
@@ -482,73 +525,76 @@ struct EditTransactionView: View {
         
         // 清空現有陣列
         existingImages.removeAll()
+        existingPhotosData.removeAll()
         
         if let photosData = transaction.photosData {
             for photoData in photosData {
                 if let image = UIImage(data: photoData) {
                     existingImages.append(image)
+                    existingPhotosData.append(photoData)
                 }
             }
         }
         
         print("📸 載入了 \(existingImages.count) 張現有照片")
     }
-    
-    // MARK: - 載入新選擇的照片（修復版）
-    @MainActor
-    private func loadNewPhotos(from items: [PhotosPickerItem]) async {
-        print("📸 開始載入新照片，當前現有照片數量：\(existingImages.count)")
-        
-        isLoadingPhotos = true
-        
-        // 只清空新照片陣列
-        newImages.removeAll()
-        
-        for item in items {
-            do {
-                if let data = try await item.loadTransferable(type: Data.self) {
-                    if let image = UIImage(data: data) {
-                        let compressedData = compressImage(image, maxSizeKB: 500)
-                        if let compressedImage = UIImage(data: compressedData) {
-                            newImages.append(compressedImage)
-                        }
-                    }
-                }
-            } catch {
-                print("❌ 載入新照片失敗: \(error)")
-            }
-        }
-        
-        isLoadingPhotos = false
-        print("📸 成功載入 \(newImages.count) 張新照片")
-        print("📸 載入後現有照片數量：\(existingImages.count)")
-    }
-    
+
     // MARK: - 移除現有照片
     private func removeExistingPhoto(at index: Int) {
         guard index < existingImages.count else { return }
+        
         withAnimation {
             existingImages.remove(at: index)
-        }
-    }
-    
-    // MARK: - 移除新照片
-    private func removeNewPhoto(at index: Int) {
-        guard index < newImages.count else { return }
-        withAnimation {
-            newImages.remove(at: index)
-            if index < newPhotoItems.count {
-                newPhotoItems.remove(at: index)
+            if index < existingPhotosData.count {
+                existingPhotosData.remove(at: index)
             }
         }
+        print("🗑️ 移除現有照片 index: \(index)，剩餘 \(existingImages.count) 張")
     }
     
-    // MARK: - 清除新照片
-    private func clearNewPhotos() {
+    // MARK: - 移除拍照照片
+    private func removeCameraPhoto(at index: Int) {
+        guard index < cameraImages.count else { return }
+        
         withAnimation {
-            newPhotoItems.removeAll()
-            newImages.removeAll()
+            cameraImages.remove(at: index)
+            if index < cameraPhotosData.count {
+                cameraPhotosData.remove(at: index)
+            }
         }
+        print("🗑️ 移除拍照照片 index: \(index)，剩餘 \(cameraImages.count) 張")
+    }
+    
+    // MARK: - 移除相簿照片
+    private func removePickerPhoto(at index: Int) {
+        guard index < pickerImages.count else { return }
+        
+        withAnimation {
+            pickerImages.remove(at: index)
+            if index < pickerPhotosData.count {
+                pickerPhotosData.remove(at: index)
+            }
+            
+            // 同時移除對應的 PhotosPickerItem
+            if index < selectedPhotoItems.count {
+                selectedPhotoItems.remove(at: index)
+            }
+        }
+        print("🗑️ 移除相簿照片 index: \(index)，剩餘 \(pickerImages.count) 張")
+    }
+    
+    // MARK: - 清除所有照片
+    private func clearAllPhotos() {
+        withAnimation {
+            selectedPhotoItems.removeAll()
+            cameraImages.removeAll()
+            cameraPhotosData.removeAll()
+            pickerImages.removeAll()
+            pickerPhotosData.removeAll()
+            existingImages.removeAll()
+            existingPhotosData.removeAll()
+        }
+        print("🗑️ 清除所有照片")
     }
     
     // MARK: - 壓縮圖片
@@ -594,23 +640,7 @@ struct EditTransactionView: View {
         // 計算要儲存的台幣金額
         let amountToSave = currencyService.convertToTWD(amount: originalAmount, from: selectedCurrency)
         
-        // 合併現有照片和新照片的資料
-        var allPhotosData: [Data] = []
-        
-        // 加入保留的現有照片
-        for existingImage in existingImages {
-            if let data = existingImage.jpegData(compressionQuality: 0.8) {
-                allPhotosData.append(data)
-            }
-        }
-        
-        // 加入新選擇的照片
-        for newImage in newImages {
-            let compressedData = compressImage(newImage, maxSizeKB: 500)
-            allPhotosData.append(compressedData)
-        }
-        
-        // 如果沒有照片，傳 nil
+        // 合併所有照片的資料（原有 + 拍照 + 相簿選擇）
         let finalPhotosData = allPhotosData.isEmpty ? nil : allPhotosData
         
         dataController.updateTransaction(
@@ -733,8 +763,8 @@ struct ExistingPhotoCard: View {
     }
 }
 
-// MARK: - 新照片卡片（修復點擊區域版）
-struct NewPhotoCard: View {
+// MARK: - 拍照照片卡片（修復點擊區域版）
+struct CameraPhotoCard: View {
     let image: UIImage
     let index: Int
     let onRemove: () -> Void
@@ -749,11 +779,68 @@ struct NewPhotoCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .shadow(radius: 2)
                 .overlay(
-                    // 新照片標記
+                    // 拍照照片標記
                     VStack {
                         Spacer()
                         HStack {
-                            Text("新增")
+                            Text("拍照")
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.blue)
+                                .clipShape(Capsule())
+                            Spacer()
+                        }
+                        .padding(4)
+                    }
+                )
+            
+            // 刪除按鈕 - 嚴格限制點擊區域
+            Button {
+                print("🗑️ CameraPhotoCard 刪除按鈕被點擊，index: \(index)")
+                onRemove()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .background(
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 20, height: 20)
+                    )
+                    .font(.system(size: 16)) // 固定大小
+            }
+            .buttonStyle(PlainButtonStyle()) // 重要：移除預設按鈕樣式
+            .contentShape(Circle()) // 嚴格限制為圓形點擊區域
+            .frame(width: 24, height: 24) // 明確設定按鈕框架大小
+            .offset(x: 8, y: -8) // 調整位置，確保不重疊
+            .zIndex(1) // 確保按鈕在最上層
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8)) // 限制整個卡片的互動區域
+    }
+}
+
+// MARK: - 相簿照片卡片（修復點擊區域版）
+struct PickerPhotoCard: View {
+    let image: UIImage
+    let index: Int
+    let onRemove: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // 照片主體
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(radius: 2)
+                .overlay(
+                    // 相簿照片標記
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("相簿")
                                 .font(.caption2)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
@@ -768,7 +855,7 @@ struct NewPhotoCard: View {
             
             // 刪除按鈕 - 嚴格限制點擊區域
             Button {
-                print("🗑️ NewPhotoCard 刪除按鈕被點擊，index: \(index)")
+                print("🗑️ PickerPhotoCard 刪除按鈕被點擊，index: \(index)")
                 onRemove()
             } label: {
                 Image(systemName: "xmark.circle.fill")
