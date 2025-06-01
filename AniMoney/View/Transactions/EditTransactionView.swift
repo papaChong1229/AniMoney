@@ -178,16 +178,17 @@ struct EditTransactionView: View {
                                 }
                                 
                                 LazyVGrid(columns: [
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible())
-                                ], spacing: 8) {
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)
+                                ], spacing: 12) {
                                     ForEach(Array(existingImages.enumerated()), id: \.offset) { index, image in
                                         ExistingPhotoCard(
                                             image: image,
                                             index: index,
                                             onRemove: { removeExistingPhoto(at: index) }
                                         )
+                                        .id("existing-\(index)")
                                     }
                                 }
                                 
@@ -296,16 +297,20 @@ struct EditTransactionView: View {
                                 }
                                 
                                 LazyVGrid(columns: [
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible())
-                                ], spacing: 8) {
+                                    GridItem(.flexible(), spacing: 12), // 增加間距
+                                    GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)
+                                ], spacing: 12) { // 增加行間距
                                     ForEach(Array(newImages.enumerated()), id: \.offset) { index, image in
                                         NewPhotoCard(
                                             image: image,
                                             index: index,
-                                            onRemove: { removeNewPhoto(at: index) }
+                                            onRemove: {
+                                                print("🗑️ 準備刪除新照片 index: \(index)")
+                                                removeNewPhoto(at: index)
+                                            }
                                         )
+                                        .id("new-\(index)") // 添加唯一標識符
                                     }
                                 }
                                 
@@ -361,7 +366,7 @@ struct EditTransactionView: View {
                 Section(header: Text("詳細資訊")) {
                     TextField("備註（可選）", text: $note)
                     
-                    DatePicker("日期", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("日期", selection: $date, displayedComponents: [.date])
                 }
 
                 // MARK: - 儲存按鈕
@@ -671,7 +676,7 @@ struct CameraView: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - 現有照片卡片
+// MARK: - 現有照片卡片（修復點擊區域版）
 struct ExistingPhotoCard: View {
     let image: UIImage
     let index: Int
@@ -679,6 +684,7 @@ struct ExistingPhotoCard: View {
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            // 照片主體
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -703,18 +709,31 @@ struct ExistingPhotoCard: View {
                     }
                 )
             
-            Button(action: onRemove) {
+            // 刪除按鈕 - 嚴格限制點擊區域
+            Button {
+                print("🗑️ ExistingPhotoCard 刪除按鈕被點擊，index: \(index)")
+                onRemove()
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.red)
-                    .background(Color.white)
-                    .clipShape(Circle())
+                    .background(
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 20, height: 20)
+                    )
+                    .font(.system(size: 16)) // 固定大小
             }
-            .offset(x: 5, y: -5)
+            .buttonStyle(PlainButtonStyle()) // 重要：移除預設按鈕樣式
+            .contentShape(Circle()) // 嚴格限制為圓形點擊區域
+            .frame(width: 24, height: 24) // 明確設定按鈕框架大小
+            .offset(x: 8, y: -8) // 調整位置，確保不重疊
+            .zIndex(1) // 確保按鈕在最上層
         }
+        .contentShape(RoundedRectangle(cornerRadius: 8)) // 限制整個卡片的互動區域
     }
 }
 
-// MARK: - 新照片卡片
+// MARK: - 新照片卡片（修復點擊區域版）
 struct NewPhotoCard: View {
     let image: UIImage
     let index: Int
@@ -722,6 +741,7 @@ struct NewPhotoCard: View {
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            // 照片主體
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -746,13 +766,26 @@ struct NewPhotoCard: View {
                     }
                 )
             
-            Button(action: onRemove) {
+            // 刪除按鈕 - 嚴格限制點擊區域
+            Button {
+                print("🗑️ NewPhotoCard 刪除按鈕被點擊，index: \(index)")
+                onRemove()
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.red)
-                    .background(Color.white)
-                    .clipShape(Circle())
+                    .background(
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 20, height: 20)
+                    )
+                    .font(.system(size: 16)) // 固定大小
             }
-            .offset(x: 5, y: -5)
+            .buttonStyle(PlainButtonStyle()) // 重要：移除預設按鈕樣式
+            .contentShape(Circle()) // 嚴格限制為圓形點擊區域
+            .frame(width: 24, height: 24) // 明確設定按鈕框架大小
+            .offset(x: 8, y: -8) // 調整位置，確保不重疊
+            .zIndex(1) // 確保按鈕在最上層
         }
+        .contentShape(RoundedRectangle(cornerRadius: 8)) // 限制整個卡片的互動區域
     }
 }
