@@ -383,20 +383,20 @@ struct SearchResultRow: View {
                         .background(Color.purple.opacity(0.1))
                         .clipShape(Capsule())
                     }
-                    
-                    if transaction.photoData != nil {
-                        HStack {
-                            Image(systemName: "photo.fill")
-                                .font(.caption2)
-                            Text("附件")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Color.green.opacity(0.1))
-                        .clipShape(Capsule())
+                }
+                
+                if transaction.hasPhotos {
+                    HStack {
+                        Image(systemName: "photo.fill")
+                            .font(.caption2)
+                        Text("\(transaction.photoCount) 張附件")
+                            .font(.caption2)
                     }
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color.green.opacity(0.1))
+                    .clipShape(Capsule())
                 }
             }
         }

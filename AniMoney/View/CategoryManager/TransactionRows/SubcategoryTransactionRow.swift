@@ -64,6 +64,20 @@ struct SubcategoryTransactionRow: View {
                     Text(timeFormatter.string(from: transaction.date))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    if transaction.hasPhotos {
+                        HStack {
+                            Image(systemName: "photo.fill")
+                                .font(.caption2)
+                            Text("\(transaction.photoCount) 張照片") // 顯示照片數量
+                                .font(.caption)
+                        }
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
                 }
                 
                 if let note = transaction.note, !note.isEmpty {
@@ -85,17 +99,6 @@ struct SubcategoryTransactionRow: View {
                     .padding(.vertical, 2)
                     .background(Color.blue.opacity(0.1))
                     .clipShape(Capsule())
-                }
-                
-                // 如果有照片，顯示小圖示
-                if transaction.photoData != nil {
-                    HStack {
-                        Image(systemName: "photo.fill")
-                            .font(.caption2)
-                        Text("附件")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.green)
                 }
             }
             

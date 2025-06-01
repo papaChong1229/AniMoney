@@ -88,11 +88,11 @@ struct ProjectTransactionRow: View {
                         .padding(.top, 2)
                 }
                 
-                if transaction.photoData != nil {
+                if transaction.hasPhotos {
                     HStack {
                         Image(systemName: "photo.fill")
                             .font(.caption2)
-                        Text("附件")
+                        Text("\(transaction.photoCount) 張附件")
                             .font(.caption2)
                     }
                     .foregroundColor(.green)

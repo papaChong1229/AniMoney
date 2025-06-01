@@ -1,6 +1,9 @@
 import SwiftUI
 import PhotosUI
 
+import SwiftUI
+import PhotosUI
+
 struct AddTransactionView: View {
     @EnvironmentObject var dataController: DataController
     @ObservedObject var currencyService = CurrencyService.shared
@@ -15,10 +18,11 @@ struct AddTransactionView: View {
     @State private var transactionDate = Date()
     @State private var selectedCurrency: Currency = .twd
     
-    // 照片相關狀態
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var selectedPhotoData: Data?
-    @State private var selectedImage: UIImage?
+    // 多張照片相關狀態
+    @State private var selectedPhotoItems: [PhotosPickerItem] = [] // 改為陣列
+    @State private var selectedPhotosData: [Data] = [] // 改為陣列
+    @State private var selectedImages: [UIImage] = [] // 改為陣列
+    @State private var isLoadingPhotos = false
 
     // UI 狀態
     @State private var showingCategoryPicker = false
@@ -34,7 +38,7 @@ struct AddTransactionView: View {
         Double(amountText) != nil &&
         Double(amountText)! > 0 &&
         selectedCategory != nil &&
-        selectedSubcategory != nil  // 確保子類別也已選擇
+        selectedSubcategory != nil
     }
 
     var body: some View {
@@ -146,46 +150,73 @@ struct AddTransactionView: View {
                     }
                 }
 
-                // MARK: - 照片選擇
+                // MARK: - 多張照片選擇區域
                 Section(header: Text("收據照片（可選）")) {
                     VStack(spacing: 12) {
                         // 照片選擇按鈕
                         PhotosPicker(
-                            selection: $selectedPhotoItem,
+                            selection: $selectedPhotoItems,
+                            maxSelectionCount: 5, // 限制最多5張
                             matching: .images
                         ) {
                             HStack {
                                 Image(systemName: "camera.fill")
                                     .foregroundColor(.blue)
-                                Text("選擇照片")
+                                Text("選擇照片 (最多5張)")
                                     .foregroundColor(.blue)
                                 Spacer()
-                                if selectedImage != nil {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
+                                if !selectedImages.isEmpty {
+                                    Text("\(selectedImages.count)")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Color.green)
+                                        .clipShape(Capsule())
                                 }
                             }
                             .padding(.vertical, 4)
                         }
+                        .disabled(isLoadingPhotos)
                         
-                        // 照片預覽
-                        if let image = selectedImage {
-                            VStack(spacing: 8) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(maxHeight: 200)
-                                    .cornerRadius(8)
-                                    .shadow(radius: 2)
-                                
-                                Button("移除照片") {
-                                    selectedPhotoItem = nil
-                                    selectedPhotoData = nil
-                                    selectedImage = nil
+                        // 載入指示器
+                        if isLoadingPhotos {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("載入照片中...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        // 照片預覽網格
+                        if !selectedImages.isEmpty {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ], spacing: 8) {
+                                ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
+                                    PhotoPreviewCard(
+                                        image: image,
+                                        index: index,
+                                        onRemove: { removePhoto(at: index) }
+                                    )
+                                }
+                            }
+                            
+                            // 清除所有照片按鈕
+                            HStack {
+                                Spacer()
+                                Button("清除所有照片") {
+                                    clearAllPhotos()
                                 }
                                 .foregroundColor(.red)
                                 .font(.caption)
+                                Spacer()
                             }
+                            .padding(.top, 8)
                         }
                     }
                 }
@@ -207,7 +238,7 @@ struct AddTransactionView: View {
                             Spacer()
                         }
                     }
-                    .disabled(!isFormValid)
+                    .disabled(!isFormValid || isLoadingPhotos)
                 }
             }
             .navigationTitle("新增支出")
@@ -247,53 +278,76 @@ struct AddTransactionView: View {
                 ProjectPickerView(selectedProject: $selectedProject)
                     .environmentObject(dataController)
             }
-            .onChange(of: selectedPhotoItem) { _, newItem in
+            .onChange(of: selectedPhotoItems) { _, newItems in
                 Task {
-                    await loadSelectedPhoto(from: newItem)
+                    await loadSelectedPhotos(from: newItems)
                 }
             }
         }
     }
 
-    // MARK: - 加載選中的照片
+    // MARK: - 載入選中的多張照片
     @MainActor
-    private func loadSelectedPhoto(from item: PhotosPickerItem?) async {
-        guard let item = item else {
-            selectedPhotoData = nil
-            selectedImage = nil
-            return
+    private func loadSelectedPhotos(from items: [PhotosPickerItem]) async {
+        isLoadingPhotos = true
+        selectedPhotosData.removeAll()
+        selectedImages.removeAll()
+        
+        for item in items {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    if let image = UIImage(data: data) {
+                        let compressedData = compressImage(image, maxSizeKB: 500)
+                        selectedPhotosData.append(compressedData)
+                        if let compressedImage = UIImage(data: compressedData) {
+                            selectedImages.append(compressedImage)
+                        }
+                    }
+                }
+            } catch {
+                print("❌ 載入照片失敗: \(error)")
+            }
         }
         
-        do {
-            if let data = try await item.loadTransferable(type: Data.self) {
-                // 壓縮照片以節省空間
-                if let image = UIImage(data: data) {
-                    let compressedData = compressImage(image, maxSizeKB: 500) // 限制在 500KB 內
-                    selectedPhotoData = compressedData
-                    selectedImage = UIImage(data: compressedData)
-                    print("📸 照片載入成功，壓縮後大小: \(compressedData.count / 1024)KB")
-                } else {
-                    print("❌ 無法轉換照片資料")
-                }
+        isLoadingPhotos = false
+        print("📸 成功載入 \(selectedImages.count) 張照片")
+    }
+
+    // MARK: - 移除指定位置的照片
+    private func removePhoto(at index: Int) {
+        guard index < selectedImages.count && index < selectedPhotosData.count else { return }
+        
+        withAnimation {
+            selectedImages.remove(at: index)
+            selectedPhotosData.remove(at: index)
+            
+            // 如果有對應的 PhotosPickerItem，也移除
+            if index < selectedPhotoItems.count {
+                selectedPhotoItems.remove(at: index)
             }
-        } catch {
-            print("❌ 載入照片失敗: \(error)")
+        }
+    }
+    
+    // MARK: - 清除所有照片
+    private func clearAllPhotos() {
+        withAnimation {
+            selectedPhotoItems.removeAll()
+            selectedPhotosData.removeAll()
+            selectedImages.removeAll()
         }
     }
 
-    // MARK: - 壓縮圖片
+    // MARK: - 壓縮圖片（保持原有邏輯）
     private func compressImage(_ image: UIImage, maxSizeKB: Int) -> Data {
         let maxBytes = maxSizeKB * 1024
         var quality: CGFloat = 1.0
         var imageData = image.jpegData(compressionQuality: quality) ?? Data()
         
-        // 如果圖片太大，逐步降低品質
         while imageData.count > maxBytes && quality > 0.1 {
             quality -= 0.1
             imageData = image.jpegData(compressionQuality: quality) ?? Data()
         }
         
-        // 如果仍然太大，調整圖片尺寸
         if imageData.count > maxBytes {
             let scaleFactor = sqrt(Double(maxBytes) / Double(imageData.count))
             let newSize = CGSize(
@@ -323,17 +377,18 @@ struct AddTransactionView: View {
             return
         }
 
-        // 計算要儲存的台幣金額
         let amountToSave = currencyService.convertToTWD(amount: originalAmount, from: selectedCurrency)
         
-        // 使用選擇的 subcategory 和照片資料調用 addTransaction 方法
+        // 傳遞照片陣列（如果為空則傳 nil）
+        let photosToSave = selectedPhotosData.isEmpty ? nil : selectedPhotosData
+        
         dataController.addTransaction(
             category: category,
             subcategory: subcategory,
             amount: Int(round(amountToSave)),
             date: transactionDate,
             note: transactionNote.isEmpty ? nil : transactionNote,
-            photoData: selectedPhotoData, // 使用實際的照片資料
+            photosData: photosToSave, // 傳遞照片陣列
             project: selectedProject
         )
 
@@ -344,26 +399,39 @@ struct AddTransactionView: View {
             let convertedAmountText = Currency.twd.formatAmount(amountToSave)
             successMessage += "\n原始金額：\(originalAmountText)\n台幣金額：\(convertedAmountText)"
         }
-        if selectedPhotoData != nil {
-            successMessage += "\n📸 包含收據照片"
+        if !selectedPhotosData.isEmpty {
+            successMessage += "\n📸 包含 \(selectedPhotosData.count) 張收據照片"
         }
         
         alertMessage = successMessage
         showingAlert = true
     }
+}
 
-    // MARK: - 重置表單（可選功能）
-    private func resetForm() {
-        amountText = ""
-        selectedCategory = nil
-        selectedSubcategory = nil
-        selectedProject = nil
-        transactionNote = ""
-        transactionDate = Date()
-        selectedCurrency = .twd
-        selectedPhotoItem = nil
-        selectedPhotoData = nil
-        selectedImage = nil
+// MARK: - 照片預覽卡片
+struct PhotoPreviewCard: View {
+    let image: UIImage
+    let index: Int
+    let onRemove: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(radius: 2)
+            
+            // 移除按鈕
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .background(Color.white)
+                    .clipShape(Circle())
+            }
+            .offset(x: 5, y: -5)
+        }
     }
 }
 

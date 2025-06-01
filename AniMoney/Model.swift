@@ -63,7 +63,9 @@ final class Transaction {
     var amount: Int
     var date: Date
     var note: String?
-    var photoData: Data?
+    
+    // 改為陣列來儲存多張照片
+    var photosData: [Data]? // 改為可選的 Data 陣列
 
     @Relationship var project: Project?
 
@@ -73,7 +75,7 @@ final class Transaction {
         amount: Int,
         date: Date,
         note: String? = nil,
-        photoData: Data? = nil,
+        photosData: [Data]? = nil, // 更新參數
         project: Project? = nil
     ) {
         self.id = UUID()
@@ -82,7 +84,17 @@ final class Transaction {
         self.amount = amount
         self.date = date
         self.note = note
-        self.photoData = photoData
+        self.photosData = photosData
         self.project = project
+    }
+    
+    // 便利屬性：檢查是否有照片
+    var hasPhotos: Bool {
+        return photosData?.isEmpty == false
+    }
+    
+    // 便利屬性：照片數量
+    var photoCount: Int {
+        return photosData?.count ?? 0
     }
 }

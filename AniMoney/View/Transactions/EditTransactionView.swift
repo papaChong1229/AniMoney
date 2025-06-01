@@ -5,23 +5,23 @@ struct EditTransactionView: View {
     @EnvironmentObject private var dataController: DataController
     @Environment(\.dismiss) private var dismiss
 
-    // 要編輯的交易
     @Bindable var transaction: Transaction
 
     // MARK: - Form State
     @State private var selectedCategoryIndex: Int = 0
     @State private var selectedSubcategoryIndex: Int = 0
-    @State private var selectedProjectIndex: Int = 0  // 0 = None
+    @State private var selectedProjectIndex: Int = 0
 
     @State private var amountText: String = ""
     @State private var date: Date = Date()
     @State private var note: String = ""
 
-    @State private var photos: [PhotosPickerItem] = []
-    @State private var uiImages: [UIImage] = []
-    @State private var hasExistingPhoto: Bool = false
+    // 多張照片相關狀態
+    @State private var newPhotoItems: [PhotosPickerItem] = []
+    @State private var newImages: [UIImage] = []
+    @State private var existingImages: [UIImage] = []
+    @State private var isLoadingPhotos = false
 
-    // 依 dataController.categories 動態產生 subcategories，並以 order 排序
     private var subcategories: [Subcategory] {
         guard dataController.categories.indices.contains(selectedCategoryIndex) else {
             return []
@@ -34,6 +34,8 @@ struct EditTransactionView: View {
     var body: some View {
         NavigationView {
             Form {
+                // ... 類別、金額、日期、備註等其他 Section 保持不變 ...
+                
                 // 1. Category / Subcategory
                 Section("類別") {
                     Picker("類別", selection: $selectedCategoryIndex) {
@@ -42,7 +44,6 @@ struct EditTransactionView: View {
                         }
                     }
                     .onChange(of: selectedCategoryIndex) { _, newValue in
-                        // 當類別改變時，重置子類別選擇
                         selectedSubcategoryIndex = 0
                     }
                     
@@ -71,66 +72,117 @@ struct EditTransactionView: View {
                         .frame(minHeight: 80)
                 }
 
-                // 5. Photos
+                // 5. 多張照片編輯
                 Section("照片") {
-                    // 顯示現有照片
-                    if hasExistingPhoto {
-                        if let photoData = transaction.photoData,
-                           let uiImage = UIImage(data: photoData) {
-                            HStack {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipped()
-                                    .cornerRadius(8)
+                    VStack(spacing: 12) {
+                        // 顯示現有照片
+                        if !existingImages.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("現有照片")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                                 
-                                VStack(alignment: .leading) {
-                                    Text("現有照片")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Button("移除照片", role: .destructive) {
-                                        hasExistingPhoto = false
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 8) {
+                                    ForEach(Array(existingImages.enumerated()), id: \.offset) { index, image in
+                                        ExistingPhotoCard(
+                                            image: image,
+                                            index: index,
+                                            onRemove: { removeExistingPhoto(at: index) }
+                                        )
                                     }
+                                }
+                                
+                                if !existingImages.isEmpty {
+                                    Button("移除所有現有照片") {
+                                        existingImages.removeAll()
+                                    }
+                                    .foregroundColor(.red)
                                     .font(.caption)
                                 }
-                                Spacer()
                             }
                         }
-                    }
-                    
-                    // 選擇新照片
-                    PhotosPicker(
-                        selection: $photos,
-                        maxSelectionCount: 1,
-                        matching: .images
-                    ) {
-                        Text(hasExistingPhoto ? "更換照片" : "選擇照片")
-                    }
-                    .onChange(of: photos) { _, newItems in
-                        uiImages.removeAll()
-                        for item in newItems {
-                            Task {
-                                if let data = try? await item.loadTransferable(type: Data.self),
-                                   let img = UIImage(data: data) {
-                                    uiImages.append(img)
-                                    hasExistingPhoto = false // 新照片會替換舊照片
+                        
+                        // 選擇新照片
+                        PhotosPicker(
+                            selection: $newPhotoItems,
+                            maxSelectionCount: 5,
+                            matching: .images
+                        ) {
+                            HStack {
+                                Image(systemName: "photo.badge.plus")
+                                    .foregroundColor(.blue)
+                                Text("新增照片")
+                                    .foregroundColor(.blue)
+                                Spacer()
+                                if !newImages.isEmpty {
+                                    Text("+\(newImages.count)")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.blue)
+                                        .clipShape(Capsule())
                                 }
                             }
                         }
-                    }
-
-                    // 顯示新選擇的照片
-                    if !uiImages.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        .disabled(isLoadingPhotos)
+                        
+                        // 載入指示器
+                        if isLoadingPhotos {
                             HStack {
-                                ForEach(uiImages, id: \.self) { img in
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 80, height: 80)
-                                        .clipped()
-                                        .cornerRadius(8)
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("載入照片中...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // 顯示新選擇的照片
+                        if !newImages.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("新增照片")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 8) {
+                                    ForEach(Array(newImages.enumerated()), id: \.offset) { index, image in
+                                        NewPhotoCard(
+                                            image: image,
+                                            index: index,
+                                            onRemove: { removeNewPhoto(at: index) }
+                                        )
+                                    }
+                                }
+                                
+                                Button("清除新增照片") {
+                                    clearNewPhotos()
+                                }
+                                .foregroundColor(.red)
+                                .font(.caption)
+                            }
+                        }
+                        
+                        // 照片總數提示
+                        let totalPhotoCount = existingImages.count + newImages.count
+                        if totalPhotoCount > 0 {
+                            HStack {
+                                Text("總共 \(totalPhotoCount) 張照片")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                if totalPhotoCount > 5 {
+                                    Text("⚠️ 超過建議的5張")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
                                 }
                             }
                         }
@@ -159,21 +211,28 @@ struct EditTransactionView: View {
                     Button("儲存") {
                         saveChanges()
                     }
-                    .disabled(amountText.isEmpty || subcategories.isEmpty)
+                    .disabled(amountText.isEmpty || subcategories.isEmpty || isLoadingPhotos)
                 }
             }
         }
         .onAppear {
             initializeFormData()
         }
+        .onChange(of: newPhotoItems) { _, newItems in
+            Task {
+                await loadNewPhotos(from: newItems)
+            }
+        }
     }
     
+    // MARK: - 初始化表單數據
     private func initializeFormData() {
-        // 初始化表單數據
         amountText = String(transaction.amount)
         date = transaction.date
         note = transaction.note ?? ""
-        hasExistingPhoto = transaction.photoData != nil
+        
+        // 載入現有照片
+        loadExistingPhotos()
         
         // 設定類別選擇
         if let categoryIndex = dataController.categories.firstIndex(where: { $0.id == transaction.category.id }) {
@@ -196,6 +255,100 @@ struct EditTransactionView: View {
         }
     }
     
+    // MARK: - 載入現有照片
+    private func loadExistingPhotos() {
+        existingImages.removeAll()
+        
+        if let photosData = transaction.photosData {
+            for photoData in photosData {
+                if let image = UIImage(data: photoData) {
+                    existingImages.append(image)
+                }
+            }
+        }
+    }
+    
+    // MARK: - 載入新選擇的照片
+    @MainActor
+    private func loadNewPhotos(from items: [PhotosPickerItem]) async {
+        isLoadingPhotos = true
+        newImages.removeAll()
+        
+        for item in items {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    if let image = UIImage(data: data) {
+                        let compressedData = compressImage(image, maxSizeKB: 500)
+                        if let compressedImage = UIImage(data: compressedData) {
+                            newImages.append(compressedImage)
+                        }
+                    }
+                }
+            } catch {
+                print("❌ 載入新照片失敗: \(error)")
+            }
+        }
+        
+        isLoadingPhotos = false
+    }
+    
+    // MARK: - 移除現有照片
+    private func removeExistingPhoto(at index: Int) {
+        guard index < existingImages.count else { return }
+        withAnimation {
+            existingImages.remove(at: index)
+        }
+    }
+    
+    // MARK: - 移除新照片
+    private func removeNewPhoto(at index: Int) {
+        guard index < newImages.count else { return }
+        withAnimation {
+            newImages.remove(at: index)
+            if index < newPhotoItems.count {
+                newPhotoItems.remove(at: index)
+            }
+        }
+    }
+    
+    // MARK: - 清除新照片
+    private func clearNewPhotos() {
+        withAnimation {
+            newPhotoItems.removeAll()
+            newImages.removeAll()
+        }
+    }
+    
+    // MARK: - 壓縮圖片
+    private func compressImage(_ image: UIImage, maxSizeKB: Int) -> Data {
+        let maxBytes = maxSizeKB * 1024
+        var quality: CGFloat = 1.0
+        var imageData = image.jpegData(compressionQuality: quality) ?? Data()
+        
+        while imageData.count > maxBytes && quality > 0.1 {
+            quality -= 0.1
+            imageData = image.jpegData(compressionQuality: quality) ?? Data()
+        }
+        
+        if imageData.count > maxBytes {
+            let scaleFactor = sqrt(Double(maxBytes) / Double(imageData.count))
+            let newSize = CGSize(
+                width: image.size.width * scaleFactor,
+                height: image.size.height * scaleFactor
+            )
+            
+            UIGraphicsBeginImageContextWithOptions(newSize, false, image.scale)
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+            let resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+            UIGraphicsEndImageContext()
+            
+            imageData = resizedImage.jpegData(compressionQuality: 0.8) ?? Data()
+        }
+        
+        return imageData
+    }
+    
+    // MARK: - 儲存變更
     private func saveChanges() {
         guard let amount = Int(amountText),
               dataController.categories.indices.contains(selectedCategoryIndex),
@@ -209,18 +362,25 @@ struct EditTransactionView: View {
             ? dataController.projects[selectedProjectIndex - 1]
             : nil
         
-        // 處理照片數據
-        var photoData: Data? = nil
-        if !uiImages.isEmpty {
-            // 使用新選擇的照片
-            photoData = uiImages.first?.jpegData(compressionQuality: 0.8)
-        } else if hasExistingPhoto {
-            // 保留現有照片
-            photoData = transaction.photoData
-        }
-        // 如果 hasExistingPhoto 為 false 且沒有新照片，photoData 保持 nil（移除照片）
+        // 合併現有照片和新照片的資料
+        var allPhotosData: [Data] = []
         
-        // 使用 DataController 的更新方法
+        // 加入保留的現有照片
+        for existingImage in existingImages {
+            if let data = existingImage.jpegData(compressionQuality: 0.8) {
+                allPhotosData.append(data)
+            }
+        }
+        
+        // 加入新選擇的照片
+        for newImage in newImages {
+            let compressedData = compressImage(newImage, maxSizeKB: 500)
+            allPhotosData.append(compressedData)
+        }
+        
+        // 如果沒有照片，傳 nil
+        let finalPhotosData = allPhotosData.isEmpty ? nil : allPhotosData
+        
         dataController.updateTransaction(
             transaction,
             category: selectedCategory,
@@ -228,7 +388,7 @@ struct EditTransactionView: View {
             amount: amount,
             date: date,
             note: note.isEmpty ? nil : note,
-            photoData: photoData,
+            photosData: finalPhotosData,
             project: selectedProject
         )
         
@@ -236,12 +396,88 @@ struct EditTransactionView: View {
     }
 }
 
-#Preview {
-    EditTransactionView(transaction: Transaction(
-        category: Category(name: "食品酒水", order: 0),
-        subcategory: Subcategory(name: "早餐", order: 0),
-        amount: 100,
-        date: Date()
-    ))
-    .environmentObject(try! DataController())
+// MARK: - 現有照片卡片
+struct ExistingPhotoCard: View {
+    let image: UIImage
+    let index: Int
+    let onRemove: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(radius: 2)
+                .overlay(
+                    // 現有照片標記
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("原有")
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.green)
+                                .clipShape(Capsule())
+                            Spacer()
+                        }
+                        .padding(4)
+                    }
+                )
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .background(Color.white)
+                    .clipShape(Circle())
+            }
+            .offset(x: 5, y: -5)
+        }
+    }
+}
+
+// MARK: - 新照片卡片
+struct NewPhotoCard: View {
+    let image: UIImage
+    let index: Int
+    let onRemove: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(radius: 2)
+                .overlay(
+                    // 新照片標記
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("新增")
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.blue)
+                                .clipShape(Capsule())
+                            Spacer()
+                        }
+                        .padding(4)
+                    }
+                )
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .background(Color.white)
+                    .clipShape(Circle())
+            }
+            .offset(x: 5, y: -5)
+        }
+    }
 }

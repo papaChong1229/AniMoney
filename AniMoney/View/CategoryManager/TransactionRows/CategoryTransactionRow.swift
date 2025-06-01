@@ -90,11 +90,11 @@ struct CategoryTransactionRow: View {
                         .clipShape(Capsule())
                     }
                     
-                    if transaction.photoData != nil {
+                    if transaction.hasPhotos {
                         HStack {
                             Image(systemName: "photo.fill")
                                 .font(.caption2)
-                            Text("圖片")
+                            Text("\(transaction.photoCount)")
                                 .font(.caption2)
                         }
                         .foregroundColor(.green)

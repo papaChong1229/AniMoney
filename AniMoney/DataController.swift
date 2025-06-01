@@ -60,9 +60,8 @@ final class DataController: ObservableObject {
     func fetchAll() {
         do {
             // Fetch Categories with their subcategories pre-fetched if needed (though usually automatic)
-            var catDesc  = FetchDescriptor<Category>(sortBy: [SortDescriptor(\Category.order)])
+            let catDesc  = FetchDescriptor<Category>(sortBy: [SortDescriptor(\Category.order)])
             // catDesc.relationshipKeyPathsForPrefetching = [\.subcategories] // Optional: explicitly prefetch
-
             let projDesc = FetchDescriptor<Project>(sortBy: [SortDescriptor(\Project.order)])
             let txDesc   = FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\Transaction.date, order: .reverse)])
 
@@ -311,33 +310,31 @@ final class DataController: ObservableObject {
     }
 
     // MARK: - Transaction CRUD
-    // MARK: - Transaction CRUD
     func addTransaction(
         category: Category,
         subcategory: Subcategory,
         amount: Int,
         date: Date,
         note: String? = nil,
-        photoData: Data? = nil, // <--- 在這裡加上 photoData 參數
+        photosData: [Data]? = nil, // 改為陣列
         project: Project? = nil
     ) {
-        // Ensure we are using managed instances for relationships
+        // 確保我們使用的是管理的實例
         guard let managedCategory = categories.first(where: { $0.id == category.id }) ?? container.mainContext.model(for: category.persistentModelID) as? Category else {
             print("❌ AddTransaction Error: Category not managed."); return
         }
-        // Crucially, check if the subcategory belongs to THIS managedCategory instance's subcategories array.
+        
         guard let managedSubcategory = managedCategory.subcategories.first(where: { $0.id == subcategory.id }) else {
             print("❌ AddTransaction Error: Subcategory '\(subcategory.name)' does not belong to category '\(managedCategory.name)' or is not managed correctly.")
-            if let _ = container.mainContext.model(for: subcategory.persistentModelID) as? Subcategory {
-                print("ℹ️ Subcategory exists in context but not in parent's list. This indicates a data integrity issue or incorrect usage.")
-            }
             return
         }
         
         var managedProject: Project? = nil
         if let proj = project {
             managedProject = projects.first(where: { $0.id == proj.id }) ?? container.mainContext.model(for: proj.persistentModelID) as? Project
-            if managedProject == nil { print("⚠️ AddTransaction Warning: Project not found in managed context, transaction will have nil project."); }
+            if managedProject == nil {
+                print("⚠️ AddTransaction Warning: Project not found in managed context, transaction will have nil project.")
+            }
         }
 
         let tx = Transaction(
@@ -346,7 +343,7 @@ final class DataController: ObservableObject {
             amount: amount,
             date: date,
             note: note,
-            photoData: photoData, // <--- 在這裡傳遞 photoData 給 Transaction 的 init
+            photosData: photosData, // 傳遞照片陣列
             project: managedProject
         )
         container.mainContext.insert(tx)
@@ -414,7 +411,7 @@ final class DataController: ObservableObject {
         amount: Int,
         date: Date,
         note: String? = nil,
-        photoData: Data? = nil,
+        photosData: [Data]? = nil, // 改為陣列
         project: Project? = nil
     ) {
         // 確保使用管理的實例
@@ -441,7 +438,7 @@ final class DataController: ObservableObject {
         transaction.amount = amount
         transaction.date = date
         transaction.note = note
-        transaction.photoData = photoData
+        transaction.photosData = photosData // 更新照片陣列
         transaction.project = managedProject
         
         if saveContext() {
