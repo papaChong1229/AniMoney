@@ -258,71 +258,92 @@ struct SettingView: View {
 // MARK: - 關於頁面
 struct AboutView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "app.gift.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.blue)
-            
-            Text("\(Bundle.main.appName)")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-            
-            Text("版本 \(Bundle.main.appVersion) (Build \(Bundle.main.appBuild))")
-                .font(.headline)
-                .foregroundColor(.secondary)
-            
-            Divider()
-            
-            VStack(spacing: 12) {
-                Text("功能特色")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "app.gift.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    FeatureRow(icon: "chart.bar.fill", title: "統計圖表", description: "多種圖表檢視方式")
-                    FeatureRow(icon: "calendar.circle.fill", title: "日曆統計", description: "按日期檢視支出")
-                    FeatureRow(icon: "bell.fill", title: "智能提醒", description: "每日記帳提醒")
-                    FeatureRow(icon: "folder.fill", title: "專案管理", description: "追蹤特定項目支出")
+                Text("\(Bundle.main.appName)")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text("版本 \(Bundle.main.appVersion) (Build \(Bundle.main.appBuild))")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                
+                Divider()
+                    .padding(.horizontal)
+                
+                VStack(spacing: 12) {
+                    Text("功能特色")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    VStack(alignment: .center, spacing: 12) {
+                        FeatureRow(icon: "chart.bar.fill", title: "統計圖表", description: "多種圖表檢視方式")
+                        FeatureRow(icon: "calendar.circle.fill", title: "日曆統計", description: "按日期檢視支出")
+                        FeatureRow(icon: "bell.fill", title: "智能提醒", description: "每日記帳提醒")
+                        FeatureRow(icon: "folder.fill", title: "專案管理", description: "追蹤特定項目支出")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                
+                // 底部版權資訊
+                VStack(spacing: 8) {
+                    Text("© \(Calendar.current.component(.year, from: Date())) \(Bundle.main.companyName)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("感謝您使用我們的記帳應用")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 40) // 增加底部間距，確保內容不會太貼底
             }
-            
-            Spacer()
-            
-            Text("© \(Calendar.current.component(.year, from: Date())) \(Bundle.main.companyName)\n感謝您使用我們的記帳應用")
-                .font(.caption)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
+            .padding()
         }
-        .padding()
         .navigationTitle("關於")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
-// MARK: - 功能特色行
+// MARK: - 功能特色行（置中版本）
 struct FeatureRow: View {
     let icon: String
     let title: String
     let description: String
     
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 8) {
+            // 圖標
             Image(systemName: icon)
                 .foregroundColor(.blue)
-                .frame(width: 24, height: 24)
+                .font(.title2)
+                .frame(width: 32, height: 32)
             
-            VStack(alignment: .leading, spacing: 2) {
+            // 標題和描述
+            VStack(spacing: 4) {
                 Text(title)
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+                
                 Text(description)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            
-            Spacer()
         }
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
     }
 }
 
