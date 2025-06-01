@@ -296,6 +296,7 @@ struct CalendarStatisticView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.bottom, 20) // 添加底部間距
             } else {
                 // 根據選擇的圖表類型顯示不同的內容
                 // 當日曆隱藏時，給圖表更多高度
@@ -325,6 +326,7 @@ struct CalendarStatisticView: View {
                             selectedDateFromCalendar: selectedDateFromCalendar,
                             isCalendarHidden: !isCalendarVisible
                         )
+                        .padding(.bottom, 20) // 為圖表添加底部間距
                     case .pieChart:
                         CategoryPieChartView(
                             headerTitle: listHeaderTitle,
@@ -336,6 +338,7 @@ struct CalendarStatisticView: View {
                             selectedDateFromCalendar: selectedDateFromCalendar,
                             isCalendarHidden: !isCalendarVisible
                         )
+                        .padding(.bottom, 20) // 為圖表添加底部間距
                     }
                 }
                 .frame(maxHeight: chartHeight)
@@ -410,6 +413,7 @@ struct CategoryListView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
+        .padding(.bottom, 20) // 為列表添加底部間距
     }
 }
 
@@ -539,6 +543,7 @@ struct CategoryBarChartView: View {
                 .padding(.horizontal)
             }
             .padding(.vertical)
+            .padding(.bottom, 20) // 為 ScrollView 內容添加底部間距
         }
     }
 }
@@ -658,6 +663,7 @@ struct CategoryPieChartView: View {
                 .padding(.horizontal)
             }
             .padding(.vertical)
+            .padding(.bottom, 20) // 為長條圖 ScrollView 內容添加底部間距
         }
     }
 }
