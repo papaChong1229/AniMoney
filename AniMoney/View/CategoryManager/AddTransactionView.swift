@@ -56,7 +56,8 @@ struct AddTransactionView: View {
         Double(amountText) != nil &&
         Double(amountText)! > 0 &&
         selectedCategory != nil &&
-        selectedSubcategory != nil
+        selectedSubcategory != nil &&
+        allImages.count <= 5
     }
 
     var body: some View {
@@ -337,8 +338,8 @@ struct AddTransactionView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                if allImages.count >= 5 {
-                                    Text("已達上限")
+                                if allImages.count > 5 {
+                                    Text("照片的數量上限為 5 張")
                                         .font(.caption)
                                         .foregroundColor(.orange)
                                 }
