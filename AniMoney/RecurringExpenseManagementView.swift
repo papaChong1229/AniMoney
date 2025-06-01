@@ -355,6 +355,8 @@ struct EditRecurringExpenseView: View {
     @Environment(\.dismiss) var dismiss
     @Bindable var expense: RecurringExpense
     
+    @State private var isInitializing = true // 追蹤是否正在初始化
+    
     // 表單狀態
     @State private var name = ""
     @State private var amountText = ""
@@ -534,7 +536,10 @@ struct EditRecurringExpenseView: View {
                 Text(alertMessage)
             }
             .onChange(of: selectedCategory) { _, _ in
-                selectedSubcategory = nil
+                // 只有在非初始化狀態時才清空子類別
+                if !isInitializing {
+                    selectedSubcategory = nil
+                }
             }
         }
         .onAppear {
@@ -557,16 +562,25 @@ struct EditRecurringExpenseView: View {
     
     // MARK: - 初始化表單資料
     private func initializeFormData() {
+        isInitializing = true // 開始初始化
+        
         name = expense.name
         amountText = String(expense.amount)
         note = expense.note ?? ""
         recurrenceType = expense.recurrenceType
-        selectedCategory = expense.category
-        selectedSubcategory = expense.subcategory
-        selectedProject = expense.project
         selectedMonthlyDates = Set(expense.monthlyDates)
         intervalDays = expense.intervalDays
         isActive = expense.isActive
+        selectedProject = expense.project
+        
+        // 設定類別和子類別
+        selectedCategory = expense.category
+        selectedSubcategory = expense.subcategory
+        
+        // 初始化完成
+        DispatchQueue.main.async {
+            self.isInitializing = false
+        }
     }
     
     // MARK: - 儲存變更
