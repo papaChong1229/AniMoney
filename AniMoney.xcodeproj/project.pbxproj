@@ -34,8 +34,26 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Tests/AniMoneyTests/AniMoneyTests.swift,
+				Tests/AniMoneyUITests/AniMoneyUITests.swift,
+				Tests/AniMoneyUITests/AniMoneyUITestsLaunchTests.swift,
 			);
 			target = F01E2BB32DDCF66100F83BCE /* AniMoney */;
+		};
+		F088B8642DECA9CC00CE87D1 /* Exceptions for "AniMoney" folder in "AniMoneyTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Tests/AniMoneyTests/AniMoneyTests.swift,
+			);
+			target = F01E2BC02DDCF66200F83BCE /* AniMoneyTests */;
+		};
+		F088B8652DECA9CC00CE87D1 /* Exceptions for "AniMoney" folder in "AniMoneyUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Tests/AniMoneyUITests/AniMoneyUITests.swift,
+				Tests/AniMoneyUITests/AniMoneyUITestsLaunchTests.swift,
+			);
+			target = F01E2BCA2DDCF66200F83BCE /* AniMoneyUITests */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -44,18 +62,10 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				F088B83B2DEC37E500CE87D1 /* Exceptions for "AniMoney" folder in "AniMoney" target */,
+				F088B8642DECA9CC00CE87D1 /* Exceptions for "AniMoney" folder in "AniMoneyTests" target */,
+				F088B8652DECA9CC00CE87D1 /* Exceptions for "AniMoney" folder in "AniMoneyUITests" target */,
 			);
 			path = AniMoney;
-			sourceTree = "<group>";
-		};
-		F01E2BC42DDCF66200F83BCE /* AniMoneyTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AniMoneyTests;
-			sourceTree = "<group>";
-		};
-		F01E2BCE2DDCF66200F83BCE /* AniMoneyUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AniMoneyUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -89,8 +99,6 @@
 			isa = PBXGroup;
 			children = (
 				F01E2BB62DDCF66100F83BCE /* AniMoney */,
-				F01E2BC42DDCF66200F83BCE /* AniMoneyTests */,
-				F01E2BCE2DDCF66200F83BCE /* AniMoneyUITests */,
 				F01E2BB52DDCF66100F83BCE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -143,9 +151,6 @@
 			dependencies = (
 				F01E2BC32DDCF66200F83BCE /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				F01E2BC42DDCF66200F83BCE /* AniMoneyTests */,
-			);
 			name = AniMoneyTests;
 			packageProductDependencies = (
 			);
@@ -165,9 +170,6 @@
 			);
 			dependencies = (
 				F01E2BCD2DDCF66200F83BCE /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				F01E2BCE2DDCF66200F83BCE /* AniMoneyUITests */,
 			);
 			name = AniMoneyUITests;
 			packageProductDependencies = (
